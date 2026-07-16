@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#FF2442">
+  <title>餐饮后厨</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- 顶部品牌条 -->
+    <header class="topbar">
+      <div class="brand">🍳 餐饮后厨</div>
+    </header>
+
+    <!-- 滑动轨道：4 个面板（常用原料 / 记录 / 原料库 / 设置）-->
+    <div class="tab-track" id="tab-track">
+
+      <!-- Tab1 常用目录 -->
+      <section class="tab-panel" id="panel-catalog">
+        <div class="panel-head catalog-head">
+          <select id="cat-filter" class="mini-select"></select>
+          <span id="catalog-count" class="count">0 项</span>
+          <div class="tool-btns">
+            <button id="btn-order" class="btn primary sm">下单</button>
+            <button id="btn-inventory" class="btn outline sm">盘存</button>
+          </div>
+          <button id="catalog-search-btn" class="icon-btn" aria-label="搜索">🔍</button>
+        </div>
+        <div class="list-scroll">
+          <table class="grid">
+            <thead>
+              <tr><th>名称</th><th>单价</th><th>单位</th><th>数量</th><th>选择</th></tr>
+            </thead>
+            <tbody id="catalog-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Tab2 订单记录 -->
+      <section class="tab-panel" id="panel-orders">
+        <div class="orders-toggles" id="orders-toggles">
+          <label class="tg"><input type="checkbox" id="tog-price"> 显示价格</label>
+          <button type="button" id="orders-edit-toggle" class="ghost-btn">编辑</button>
+        </div>
+        <div class="orders-layout">
+          <div class="orders-tree list-scroll" id="orders-tree"></div>
+          <div class="orders-detail list-scroll" id="orders-detail"></div>
+        </div>
+      </section>
+
+      <!-- Tab3 原料库 -->
+      <section class="tab-panel" id="panel-library">
+        <div class="panel-head">
+          <div class="filter-tags">
+            <select id="lib-cat" class="mini-select"></select>
+            <select id="lib-season" class="mini-select"></select>
+            <select id="lib-month" class="mini-select"></select>
+            <button type="button" id="lib-cols-btn" class="mini-select col-btn">显示 ▾</button>
+          </div>
+          <button id="lib-search-btn" class="icon-btn" aria-label="搜索">🔍</button>
+        </div>
+        <div class="panel-head sub lib-search-wrap" id="lib-search-wrap" style="display:none">
+          <input id="lib-search-input" class="search-inline" type="search" placeholder="搜索名称…" inputmode="search">
+        </div>
+        <div class="toolbar" id="lib-toolbar">
+          <span id="library-count" class="count">0 项</span>
+          <div class="lib-toolbar-btns" id="lib-toolbar-normal">
+            <button id="lib-sort-btn" class="btn small outline">排序 ▾</button>
+            <button id="lib-edit-btn" class="btn small outline">编辑</button>
+          </div>
+          <div class="lib-toolbar-btns lib-edit-actions" id="lib-toolbar-edit" style="display:none">
+            <button id="lib-select-all" class="btn small outline">全选</button>
+            <button id="lib-delete-selected" class="btn small danger">删除选中(<span id="lib-selected-count">0</span>)</button>
+            <button id="lib-edit-done" class="btn small primary">完成</button>
+          </div>
+        </div>
+        <div class="list-scroll lib-scroll">
+          <table class="grid wide">
+            <thead>
+              <tr id="library-head"></tr>
+            </thead>
+            <tbody id="library-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Tab5 设置 -->
+      <section class="tab-panel" id="panel-settings">
+        <div class="panel-head"><div class="title">设置</div></div>
+        <div class="list-scroll settings">
+          <div class="card">
+            <div class="card-title">种类管理</div>
+            <div id="cat-list" class="cat-list"></div>
+            <div class="cat-add">
+              <input id="cat-input" type="text" placeholder="新增种类名">
+              <button id="cat-add" class="btn small">添加</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">原料库数据</div>
+            <div class="row-btns">
+              <button id="btn-restore" class="btn small outline">恢复原料库</button>
+              <button id="btn-export" class="btn small outline">导出JSON</button>
+              <button id="btn-import" class="btn small outline">导入JSON</button>
+              <input id="file-input" type="file" accept="application/json,.json" hidden>
+            </div>
+            <div class="api-box">
+              <div class="api-title">价格更新（已内置免费代理，直接点「更新价格」即可）</div>
+              <label class="set-row col">更新来源（一般不用改）
+                <input id="set-price-worker" class="set-input" placeholder="已内置免费代理">
+              </label>
+              <label class="set-row check"><input type="checkbox" id="set-price-all"> 更新全部原料（不勾则只更新常用目录）</label>
+              <label class="set-row check"><input type="checkbox" id="set-price-syncunit" checked> 更新时同步单位（对齐为新发地单位，如斤）</label>
+              <div class="api-hint muted">App 已内置免费代理，点「更新价格」即拉取当天新发地批发行情。偶尔连不上会自动用内置当日价，不影响使用。无需注册、无需付费。</div>
+            </div>
+            <div class="row-btns" style="margin-top:10px">
+              <button id="btn-update-price" class="btn small primary">更新价格</button>
+              <span class="muted" style="margin-left:8px">免费 · 当天新发地批发行情</span>
+            </div>
+            <div class="update-note muted" id="price-update-note"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">外观</div>
+            <label class="set-row">字体大小 <span id="font-val" class="muted"></span>
+              <input id="set-font" type="range" min="13" max="20" step="1">
+            </label>
+            <label class="set-row">主题色
+              <input id="set-theme" type="color" value="#FF2442">
+            </label>
+          </div>
+
+          <div class="card danger-card">
+            <div class="card-title">危险操作</div>
+            <button id="btn-reset" class="btn small danger">重置全部数据</button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- 底部 5 Tab 导航 -->
+    <nav class="bottom-nav">
+      <button class="nav-item" data-track="0"><span class="nav-ico">📋</span><span>常用原料</span></button>
+      <button class="nav-item" data-track="1"><span class="nav-ico">🧾</span><span>记录</span></button>
+      <button class="nav-item nav-add" id="nav-add"><span class="nav-ico add">＋</span></button>
+      <button class="nav-item" data-track="2"><span class="nav-ico">📦</span><span>原料库</span></button>
+      <button class="nav-item" data-track="3"><span class="nav-ico">⚙️</span><span>设置</span></button>
+    </nav>
+
+    <!-- 全屏搜索 overlay -->
+    <div class="overlay search-overlay" id="search-overlay">
+      <div class="overlay-head">
+        <input id="search-input" type="search" placeholder="搜索名称…" inputmode="search" autocomplete="off">
+        <button id="search-close" class="btn small">取消</button>
+      </div>
+      <div class="overlay-body list-scroll" id="search-results"></div>
+    </div>
+
+    <!-- 添加/编辑 侧滑面板 -->
+    <div class="editor-panel" id="editor-panel">
+      <div class="editor-head">
+        <button id="ed-cancel" class="btn small">取消</button>
+        <div class="editor-title">添加 / 编辑原料</div>
+        <button id="ed-save" class="btn small primary">保存</button>
+      </div>
+      <div class="editor-body">
+        <label class="field">名称
+          <input id="ed-name" type="text" placeholder="如：鲤鱼">
+        </label>
+        <label class="field">单位（可输入，也可点 ▼ 选择）
+          <div class="unit-pick">
+            <input id="ed-unit" type="text" placeholder="如：斤 / 个 / 把" autocomplete="off">
+            <button type="button" id="ed-unit-btn" class="unit-btn" aria-label="选择单位">▼</button>
+            <div class="unit-menu" id="ed-unit-menu" style="display:none"></div>
+          </div>
+        </label>
+        <label class="field">单价
+          <input id="ed-price" type="number" inputmode="decimal" step="0.1" min="0" placeholder="0.00">
+        </label>
+        <label class="field">种类
+          <select id="ed-cat"></select>
+        </label>
+        <div class="field">季节（联动月份）
+          <div id="ed-seasons" class="chips"></div>
+        </div>
+        <div class="field">月份（可多选）
+          <div id="ed-months" class="chips"></div>
+        </div>
+        <label class="field inline">
+          <input id="ed-common" type="checkbox"> 加入常用目录
+        </label>
+      </div>
+    </div>
+
+    <!-- 长按行菜单 -->
+    <div class="ctx-menu" id="ctx-menu" style="display:none"></div>
+
+    <!-- 原料库「显示列」多选菜单 -->
+    <div class="col-menu" id="lib-cols-menu" style="display:none"></div>
+
+    <!-- 原料库「排序」菜单 -->
+    <div class="sort-menu" id="lib-sort-menu" style="display:none"></div>
+
+    <!-- 轻提示 -->
+    <div id="toast"></div>
+
+  </div>
+
+    <script src="vendor/xlsx.full.min.js"></script>
+    <script src="js/rawdata.js"></script>
+    <script src="js/condiments.js"></script>
+    <script src="js/prices.js"></script>
+    <script src="js/store.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
