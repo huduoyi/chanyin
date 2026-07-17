@@ -72,42 +72,61 @@
     toastTimer = setTimeout(function () { t.classList.remove('show'); }, 1800);
   }
 
-  // 长按连续触发：点一下执行一次，长按后每 interval ms 重复执行
-  // 用全局句柄管理：元素被重渲染后仍能在松手时正确停止，
-  // 修复「松手后一直移动停不下来 / 点完成没反应 / 切页面仍显示原料库」等 bug
-  var repeatHandle = null;
-  var repeatIgnoreMouseUntil = 0;
-  function stopRepeat() {
-    if (repeatHandle) {
-      if (repeatHandle.timer) clearTimeout(repeatHandle.timer);
-      if (repeatHandle.repeater) clearInterval(repeatHandle.repeater);
-      repeatHandle = null;
-    }
-    document.removeEventListener('mouseup', stopRepeat);
-    document.removeEventListener('touchend', stopRepeat);
-    document.removeEventListener('touchcancel', stopRepeat);
-    repeatIgnoreMouseUntil = 0;
+  // 原料库移动：轻点=移动一格；按住=连续移动。
+  // 关键修复（之前「松手后一直移动停不下来 / 点完成没反应 / 切页面仍显示原料库」）：
+  // 1) 按住期间只做「相邻两行轻量 DOM 交换」，不重建整表、不销毁被按住的按钮，
+  //    保证按钮的 pointer 事件持续有效，松手一定能收到停止信号。
+  // 2) 用 Pointer 事件 + 失焦/页面隐藏 多重停止信号；即使某浏览器不派发 touchend 也能停止。
+  // 3) 安全兜底：连续移动超过上限自动停止，绝不卡死。
+  var holdTimer = null, holdInterval = null, holdCount = 0;
+  var HOLD_MAX = 80; // 连续移动上限（约 80 格），兜底防卡死
+
+  function libIsFiltered() {
+    var f = State.library;
+    return (f.cat && f.cat !== '全部') || (f.season && f.season !== '全部') ||
+      (f.month && f.month !== '全部') || (f.search || '').trim() ||
+      (State.librarySort && State.librarySort !== 'default');
   }
-  function startRepeat(e, delay, interval, cb) {
-    if (e.type === 'mousedown' && Date.now() < repeatIgnoreMouseUntil) return; // 忽略触摸后模拟的鼠标事件
-    if (e.cancelable) e.preventDefault();
-    stopRepeat();   // 先清掉上一次（防止叠加 / 定时器泄漏）
-    cb();           // 立即执行一次
-    repeatIgnoreMouseUntil = Date.now() + 700;
-    var h = { timer: null, repeater: null };
-    repeatHandle = h;
-    h.timer = setTimeout(function () {
-      h.timer = null;
-      h.repeater = setInterval(cb, interval);
-    }, delay);
-    // 监听挂在 document 上：即使行被重渲染、原按钮已销毁，松手也能停止
-    document.addEventListener('mouseup', stopRepeat);
-    document.addEventListener('touchend', stopRepeat);
-    document.addEventListener('touchcancel', stopRepeat);
+
+  function stopHold() {
+    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+    if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
+    holdCount = 0;
+    document.removeEventListener('pointerup', stopHold, true);
+    document.removeEventListener('pointercancel', stopHold, true);
+    document.removeEventListener('blur', stopHold);
+    document.removeEventListener('visibilitychange', stopHold);
   }
-  function bindRepeatPress(el, delay, interval, cb) {
-    el.addEventListener('touchstart', function (e) { startRepeat(e, delay, interval, cb); }, { passive: false });
-    el.addEventListener('mousedown', function (e) { startRepeat(e, delay, interval, cb); });
+
+  function startHold(btn, id, dir) {
+    if (!btn) return;
+    stopHold();
+    moveProduct(id, dir, true); // 立即移动一格（轻量交换，不重建整表）
+    holdTimer = setTimeout(function () {
+      holdTimer = null;
+      holdCount = 0;
+      holdInterval = setInterval(function () {
+        holdCount++;
+        moveProduct(id, dir, true);
+        if (holdCount >= HOLD_MAX) stopHold(); // 安全兜底
+      }, 170);
+    }, 350);
+    // 全局停止信号：松手 / 取消 / 失焦 / 切后台 都能停
+    document.addEventListener('pointerup', stopHold, true);
+    document.addEventListener('pointercancel', stopHold, true);
+    document.addEventListener('blur', stopHold);
+    document.addEventListener('visibilitychange', stopHold);
+    // 被按住按钮自身松手：停止并归一化一次（整表重渲染，清理状态）
+    var finalize = function () {
+      btn.removeEventListener('pointerup', finalize);
+      btn.removeEventListener('pointercancel', finalize);
+      btn.removeEventListener('lostpointercapture', finalize);
+      stopHold();
+      renderLibrary();
+    };
+    btn.addEventListener('pointerup', finalize);
+    btn.addEventListener('pointercancel', finalize);
+    btn.addEventListener('lostpointercapture', finalize);
   }
 
   function bindLongPress(el, ms, cb) {
@@ -131,7 +150,7 @@
 
   // ============ Tab 切换（CSS transform 硬件加速）============
   function switchTab(i) {
-    stopRepeat(); // 切换页面时停止任何正在进行的长按重复，避免卡在原料库
+    stopHold(); // 切换页面时停止任何正在进行的长按重复，避免卡在原料库
     State.tabIndex = i;
     track.style.transform = 'translate3d(' + (-i * 25) + '%,0,0)';
     $$('[data-track]').forEach(function (b) {
@@ -612,8 +631,9 @@
       if (ei) ei.addEventListener('click', function (e) { e.stopPropagation(); openEditor(p.id); });
       var upBtn = tr.querySelector('.lib-move-up');
       var downBtn = tr.querySelector('.lib-move-down');
-      if (upBtn) bindRepeatPress(upBtn, 400, 200, function () { moveProduct(p.id, -1); });
-      if (downBtn) bindRepeatPress(downBtn, 400, 200, function () { moveProduct(p.id, 1); });
+      // 轻点=移动一格；按住=连续移动（见 startHold，已修复停不下来的 bug）
+      if (upBtn) upBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); startHold(upBtn, p.id, -1); });
+      if (downBtn) downBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); startHold(downBtn, p.id, 1); });
       return tr;
     }, 30);
     $('#library-count').textContent = list.length + ' 项';
@@ -656,7 +676,7 @@
 
   // 原料库编辑模式：切换、全选、删除选中
   function toggleLibEditMode() {
-    stopRepeat(); // 点「完成/编辑」时停止任何长按重复
+    stopHold(); // 点「完成/编辑」时停止任何长按重复
     State.libraryEditMode = !State.libraryEditMode;
     if (!State.libraryEditMode) State.libSelectedIds = {};
     renderLibrary();
@@ -733,7 +753,8 @@
   }
 
   // 原料库上下移动
-  function moveProduct(id, dir) {
+  // lightweight=true 时仅做相邻两行 DOM 交换（不重建整表，保留被按住的按钮，使长按可停）
+  function moveProduct(id, dir, lightweight) {
     var products = Store.getProducts();
     var idx = products.findIndex(function (p) { return p.id === id; });
     if (idx < 0) return;
@@ -743,16 +764,24 @@
     products[idx] = products[newIdx];
     products[newIdx] = temp;
     Store.setProducts(products);
-    // 保存当前滚动位置
+    State.librarySort = 'default';
     var sc = $('#panel-library .lib-scroll');
     if (sc) State.libScrollPos = sc.scrollTop;
-    State.librarySort = 'default';
-    renderLibrary();
+    var useLight = !!lightweight && !libIsFiltered();
+    if (useLight) {
+      var row = document.querySelector('#library-body [data-id="' + id + '"]');
+      if (row) {
+        if (dir < 0 && row.previousElementSibling) row.parentNode.insertBefore(row, row.previousElementSibling);
+        else if (dir > 0 && row.nextElementSibling) row.parentNode.insertBefore(row.nextElementSibling, row);
+      }
+    } else {
+      renderLibrary();
+    }
     // 恢复滚动位置并定位到移动项
     if (sc) {
       sc.scrollTop = State.libScrollPos;
-      var row = $('[data-id="' + id + '"]', sc);
-      if (row) row.scrollIntoView({ block: 'nearest' });
+      var r2 = $('[data-id="' + id + '"]', sc);
+      if (r2) r2.scrollIntoView({ block: 'nearest' });
     }
   }
 

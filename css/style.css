@@ -362,7 +362,7 @@ input, select { font-family: inherit; font-size: var(--font); }
 .lib-move-up, .lib-move-down {
   border: 1px solid var(--line); background: #fafafa; color: var(--text);
   font-size: 12px; padding: 2px 5px; border-radius: 6px; cursor: pointer;
-  margin: 0 1px;
+  margin: 0 1px; touch-action: none; user-select: none; -webkit-user-select: none;
 }
 .lib-move-up:active, .lib-move-down:active { background: #ffe9ec; color: var(--theme); }
 .lib-edit-check { width: 18px; height: 18px; accent-color: var(--theme); }
