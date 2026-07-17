@@ -1303,12 +1303,26 @@
     }
   }
 
+  // 请求持久化存储：授权后浏览器承诺不自动清理本站点数据（Cache API + localStorage）
+  // 否则在设备存储吃紧时，浏览器可能静默回收，导致原料库编辑/订单等丢失
+  function requestPersistentStorage() {
+    try {
+      if (navigator.storage && typeof navigator.storage.persist === 'function') {
+        navigator.storage.persist().then(function (granted) {
+          console.log('[persist] 持久化存储授权 =', granted);
+        }).catch(function () {});
+      }
+    } catch (e) {}
+  }
+
   function init() {
     try {
       track = $('#tab-track');
       searchOverlay = $('#search-overlay');
       editorPanel = $('#editor-panel');
       applyTheme();
+      // 申请持久化存储，避免浏览器在存储紧张时自动清理站点数据
+      requestPersistentStorage();
       // 合并内置原料（含新增「调味品」）：按菜名去重，保留用户已编辑项
       var _st = Store.getSettings();
       Store.mergeBuiltin();
