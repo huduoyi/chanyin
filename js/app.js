@@ -72,28 +72,42 @@
     toastTimer = setTimeout(function () { t.classList.remove('show'); }, 1800);
   }
 
-  // 长按绑定（触摸 + 鼠标）
   // 长按连续触发：点一下执行一次，长按后每 interval ms 重复执行
+  // 用全局句柄管理：元素被重渲染后仍能在松手时正确停止，
+  // 修复「松手后一直移动停不下来 / 点完成没反应 / 切页面仍显示原料库」等 bug
+  var repeatHandle = null;
+  var repeatIgnoreMouseUntil = 0;
+  function stopRepeat() {
+    if (repeatHandle) {
+      if (repeatHandle.timer) clearTimeout(repeatHandle.timer);
+      if (repeatHandle.repeater) clearInterval(repeatHandle.repeater);
+      repeatHandle = null;
+    }
+    document.removeEventListener('mouseup', stopRepeat);
+    document.removeEventListener('touchend', stopRepeat);
+    document.removeEventListener('touchcancel', stopRepeat);
+    repeatIgnoreMouseUntil = 0;
+  }
+  function startRepeat(e, delay, interval, cb) {
+    if (e.type === 'mousedown' && Date.now() < repeatIgnoreMouseUntil) return; // 忽略触摸后模拟的鼠标事件
+    if (e.cancelable) e.preventDefault();
+    stopRepeat();   // 先清掉上一次（防止叠加 / 定时器泄漏）
+    cb();           // 立即执行一次
+    repeatIgnoreMouseUntil = Date.now() + 700;
+    var h = { timer: null, repeater: null };
+    repeatHandle = h;
+    h.timer = setTimeout(function () {
+      h.timer = null;
+      h.repeater = setInterval(cb, interval);
+    }, delay);
+    // 监听挂在 document 上：即使行被重渲染、原按钮已销毁，松手也能停止
+    document.addEventListener('mouseup', stopRepeat);
+    document.addEventListener('touchend', stopRepeat);
+    document.addEventListener('touchcancel', stopRepeat);
+  }
   function bindRepeatPress(el, delay, interval, cb) {
-    var timer = null, repeater = null;
-    function start(e) {
-      e.preventDefault();
-      cb(); // 立即执行一次
-      timer = setTimeout(function () {
-        timer = null;
-        repeater = setInterval(cb, interval);
-      }, delay);
-    }
-    function stop() {
-      if (timer) { clearTimeout(timer); timer = null; }
-      if (repeater) { clearInterval(repeater); repeater = null; }
-    }
-    el.addEventListener('touchstart', start, { passive: false });
-    el.addEventListener('touchend', stop);
-    el.addEventListener('touchmove', stop);
-    el.addEventListener('mousedown', start);
-    el.addEventListener('mouseup', stop);
-    el.addEventListener('mouseleave', stop);
+    el.addEventListener('touchstart', function (e) { startRepeat(e, delay, interval, cb); }, { passive: false });
+    el.addEventListener('mousedown', function (e) { startRepeat(e, delay, interval, cb); });
   }
 
   function bindLongPress(el, ms, cb) {
@@ -117,6 +131,7 @@
 
   // ============ Tab 切换（CSS transform 硬件加速）============
   function switchTab(i) {
+    stopRepeat(); // 切换页面时停止任何正在进行的长按重复，避免卡在原料库
     State.tabIndex = i;
     track.style.transform = 'translate3d(' + (-i * 25) + '%,0,0)';
     $$('[data-track]').forEach(function (b) {
@@ -641,6 +656,7 @@
 
   // 原料库编辑模式：切换、全选、删除选中
   function toggleLibEditMode() {
+    stopRepeat(); // 点「完成/编辑」时停止任何长按重复
     State.libraryEditMode = !State.libraryEditMode;
     if (!State.libraryEditMode) State.libSelectedIds = {};
     renderLibrary();
