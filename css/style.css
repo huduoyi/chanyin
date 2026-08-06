@@ -380,3 +380,55 @@ input, select { font-family: inherit; font-size: var(--font); }
 .sort-menu .sort-opt.on { color: var(--theme); font-weight: 600; }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ===== 记录页：下单记录 / 验收记录 子标签 ===== */
+.sub-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.sub-tab {
+  flex: 1 1 0;
+  text-align: center;
+  padding: 8px 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fafafa;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.sub-tab.active {
+  background: var(--theme);
+  color: #fff;
+  border-color: var(--theme);
+}
+.rec-pane {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.accept-head .count { margin-right: auto; }
+.accept-scroll { padding-top: 8px; }
+.history-title {
+  margin: 14px 0 6px;
+  padding-left: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.acc-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+.acc-title { font-size: 13px; font-weight: 600; color: var(--theme); margin-bottom: 6px; }
+.grid.compact { border-radius: 10px; }
+.grid.compact tbody td { padding: 5px 6px; font-size: 13px; }
+.empty.muted, .muted.empty { color: var(--muted); }

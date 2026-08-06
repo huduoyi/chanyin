@@ -37,7 +37,8 @@
   var DEFAULT_LIB_COLS = ['common', 'name', 'price', 'category'];
 
   var State = {
-    tabIndex: 0,
+    tabIndex: 1,
+    recordsTab: 'orders',
     catalog: { cat: '全部', search: '' },
     library: { cat: '全部', season: '全部', month: '全部', search: '' },
     ordersDate: null,
@@ -61,6 +62,10 @@
     });
   }
   function fmtMoney(n) { return '¥' + (typeof n === 'number' ? n.toFixed(2) : '0.00'); }
+  function nowTimeStr() {
+    var d = new Date();
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
 
   var toastTimer;
   function toast(msg) {
@@ -157,7 +162,7 @@
       b.classList.toggle('active', +b.dataset.track === i);
     });
     if (i === 0) renderCatalog();
-    else if (i === 1) renderOrders();
+    else if (i === 1) { if (State.recordsTab === 'accept') renderAcceptance(); else renderOrders(); }
     else if (i === 2) renderLibrary();
     else if (i === 3) renderSettings();
   }
@@ -440,6 +445,127 @@
     if (!orders[oi].items.length) orders.splice(oi, 1);
     Store.setOrders(orders);
     renderOrders();
+  }
+
+  // ============ 记录页子标签：下单记录 / 验收记录 ============
+  function switchRecordsTab(rec) {
+    State.recordsTab = rec;
+    $$('#records-subtabs .sub-tab').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.rec === rec);
+    });
+    var ro = $('#rec-orders'), ra = $('#rec-accept');
+    if (ro) ro.style.display = (rec === 'orders') ? '' : 'none';
+    if (ra) ra.style.display = (rec === 'accept') ? '' : 'none';
+    if (rec === 'orders') renderOrders();
+    else renderAcceptance();
+  }
+
+  // 汇总「当天」所有下单原料（按 productId 合并，数量求和）
+  function getTodayOrderItems() {
+    var today = Store.nowDateStr();
+    var orders = Store.getOrders().filter(function (o) { return o.date === today; });
+    var map = {};
+    orders.forEach(function (o) {
+      (o.items || []).forEach(function (it) {
+        var id = it.productId;
+        if (!map[id]) map[id] = { productId: id, name: it.name, unit: it.unit, price: it.price, category: it.category || '', qty: 0 };
+        map[id].qty += (it.qty || 0);
+      });
+    });
+    return Object.keys(map).map(function (k) { return map[k]; });
+  }
+
+  // 验收录入：默认显示当天下单原料，数量可改、可勾选
+  function renderAcceptance() {
+    var body = $('#accept-body');
+    if (!body) return;
+    var today = Store.nowDateStr();
+    var items = getTodayOrderItems();
+    var draftAll = Store.getAcceptDraft();
+    var draft = draftAll[today] || {};
+    var cnt = $('#accept-count');
+    if (cnt) cnt.textContent = items.length + ' 项';
+    if (!items.length) {
+      body.innerHTML = '<tr><td colspan="5" class="empty-cell">今天还没有下单记录，无法验收</td></tr>';
+      renderAcceptHistory();
+      return;
+    }
+    var frag = document.createDocumentFragment();
+    items.forEach(function (it) {
+      var d = draft[it.productId] || { qty: it.qty, checked: false };
+      var tr = document.createElement('tr');
+      tr.dataset.id = it.productId;
+      tr.innerHTML =
+        '<td class="c-name">' + esc(it.name) + '</td>' +
+        '<td class="c-price">' + fmtMoney(it.price) + '</td>' +
+        '<td class="c-unit">' + esc(it.unit) + '</td>' +
+        '<td class="c-qty"><input type="number" inputmode="decimal" step="1" min="0" value="' + (d.qty || 0) + '" placeholder="0"></td>' +
+        '<td class="c-sel"><input type="checkbox"' + (d.checked ? ' checked' : '') + '></td>';
+      var qtyInput = tr.querySelector('input[type=number]');
+      qtyInput.addEventListener('input', function () {
+        var v = parseFloat(this.value) || 0;
+        var da = Store.getAcceptDraft();
+        da[today] = da[today] || {};
+        da[today][it.productId] = da[today][it.productId] || { qty: it.qty, checked: false };
+        da[today][it.productId].qty = v;
+        Store.setAcceptDraft(da);
+      });
+      tr.querySelector('input[type=checkbox]').addEventListener('change', function () {
+        var da = Store.getAcceptDraft();
+        da[today] = da[today] || {};
+        da[today][it.productId] = da[today][it.productId] || { qty: it.qty, checked: false };
+        da[today][it.productId].checked = this.checked;
+        Store.setAcceptDraft(da);
+      });
+      frag.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(frag);
+    renderAcceptHistory();
+  }
+
+  function renderAcceptHistory() {
+    var box = $('#accept-history');
+    if (!box) return;
+    var accepts = Store.getAccepts();
+    if (!accepts.length) {
+      box.innerHTML = '<div class="empty muted">暂无验收记录</div>';
+      return;
+    }
+    var html = '';
+    accepts.forEach(function (a) {
+      var n = (a.items || []).length;
+      html += '<div class="acc-card">';
+      html += '<div class="acc-title">' + esc(a.date) + ' ' + esc(a.time || '') + ' · 验收 ' + n + ' 项</div>';
+      html += '<table class="grid compact"><tbody>';
+      (a.items || []).forEach(function (it) {
+        html += '<tr><td class="c-name">' + esc(it.name) + '</td><td class="c-qty">' + (it.qty || 0) + esc(it.unit || '') + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+    });
+    box.innerHTML = html;
+  }
+
+  function saveAccept() {
+    var today = Store.nowDateStr();
+    var draftAll = Store.getAcceptDraft();
+    var draft = draftAll[today] || {};
+    var items = getTodayOrderItems();
+    var picked = [];
+    items.forEach(function (it) {
+      var d = draft[it.productId];
+      if (d && d.checked) {
+        picked.push({ productId: it.productId, name: it.name, unit: it.unit, price: it.price, category: it.category || '', qty: (d.qty != null ? d.qty : it.qty) });
+      }
+    });
+    if (!picked.length) { toast('请先勾选要验收的项'); return; }
+    var accepts = Store.getAccepts();
+    accepts.unshift({ id: uid(), date: today, time: nowTimeStr(), items: picked });
+    Store.setAccepts(accepts);
+    var da = Store.getAcceptDraft(); delete da[today]; Store.setAcceptDraft(da);
+    Store.flush();
+    toast('已保存验收（' + picked.length + ' 项）');
+    renderAcceptance();
   }
 
   // 按年/月导出：把匹配的全部单据（订单+盘存）导出为一个 Excel(.xlsx)；无 XLSX 时回退 CSV
@@ -1220,6 +1346,13 @@
       renderOrders();
     });
 
+    // 记录页子标签：下单记录 / 验收记录
+    $$('#records-subtabs .sub-tab').forEach(function (b) {
+      b.addEventListener('click', function () { switchRecordsTab(b.dataset.rec); });
+    });
+    var saveAcc = $('#btn-save-accept');
+    if (saveAcc) saveAcc.addEventListener('click', function () { saveAccept(); });
+
     // library —— 三筛选联动：
     //  选分类 → 季节、月份都重置全部；选季节 → 月份重置全部；选月份 → 季节重置全部
     $('#lib-cat').addEventListener('change', function (e) {
@@ -1342,7 +1475,7 @@
       fillLibFilters();
       bindGlobal();
       registerSW();
-      switchTab(0);
+      switchTab(1);
     } catch (e) {
       console.error('[init] error', e);
       var app = $('#app');

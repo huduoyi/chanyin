@@ -16,6 +16,8 @@
     products: PREFIX + 'products',
     commonSel: PREFIX + 'common_sel',
     orders: PREFIX + 'orders',
+    accepts: PREFIX + 'accepts',
+    acceptDraft: PREFIX + 'accept_draft',
     categories: PREFIX + 'categories',
     settings: PREFIX + 'settings'
   };
@@ -222,6 +224,22 @@
       return v || [];
     },
     setOrders: function (v) { setCache(KEYS.orders, v || [], 300); },
+
+    // 验收记录历史：每条 { id, date, time, items:[{productId,name,unit,price,category,qty}] }
+    getAccepts: function () {
+      var v = getCache(KEYS.accepts);
+      if (v === undefined) { setCache(KEYS.accepts, []); return []; }
+      return v || [];
+    },
+    setAccepts: function (v) { setCache(KEYS.accepts, v || [], 300); },
+
+    // 验收草稿：按日期存放当日录入 { date: { productId: { qty, checked } } }
+    getAcceptDraft: function () {
+      var v = getCache(KEYS.acceptDraft);
+      if (v === undefined) { setCache(KEYS.acceptDraft, {}); return {}; }
+      return v || {};
+    },
+    setAcceptDraft: function (v) { setCache(KEYS.acceptDraft, v || {}, 200); },
 
     getCategories: function () {
       var v = getCache(KEYS.categories);

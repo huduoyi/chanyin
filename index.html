@@ -41,15 +41,39 @@
         </div>
       </section>
 
-      <!-- Tab2 订单记录 -->
+      <!-- Tab2 记录（下单记录 / 验收记录）-->
       <section class="tab-panel" id="panel-orders">
-        <div class="orders-toggles" id="orders-toggles">
-          <label class="tg"><input type="checkbox" id="tog-price"> 显示价格</label>
-          <button type="button" id="orders-edit-toggle" class="ghost-btn">编辑</button>
+        <div class="sub-tabs" id="records-subtabs">
+          <button class="sub-tab active" data-rec="orders">下单记录</button>
+          <button class="sub-tab" data-rec="accept">验收记录</button>
         </div>
-        <div class="orders-layout">
-          <div class="orders-tree list-scroll" id="orders-tree"></div>
-          <div class="orders-detail list-scroll" id="orders-detail"></div>
+
+        <!-- 下单记录 -->
+        <div class="rec-pane" id="rec-orders">
+          <div class="orders-toggles" id="orders-toggles">
+            <label class="tg"><input type="checkbox" id="tog-price"> 显示价格</label>
+            <button type="button" id="orders-edit-toggle" class="ghost-btn">编辑</button>
+          </div>
+          <div class="orders-layout">
+            <div class="orders-tree list-scroll" id="orders-tree"></div>
+            <div class="orders-detail list-scroll" id="orders-detail"></div>
+          </div>
+        </div>
+
+        <!-- 验收记录 -->
+        <div class="rec-pane" id="rec-accept" style="display:none">
+          <div class="panel-head accept-head">
+            <span class="count" id="accept-count">0 项</span>
+            <button id="btn-save-accept" class="btn primary sm">保存验收</button>
+          </div>
+          <div class="list-scroll accept-scroll">
+            <table class="grid">
+              <thead><tr><th>名称</th><th>单价</th><th>单位</th><th>数量</th><th>选择</th></tr></thead>
+              <tbody id="accept-body"></tbody>
+            </table>
+            <div class="history-title">验收历史</div>
+            <div id="accept-history"></div>
+          </div>
         </div>
       </section>
 
