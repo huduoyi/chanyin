@@ -412,8 +412,9 @@ input, select { font-family: inherit; font-size: var(--font); }
   flex-direction: column;
   min-height: 0;
 }
+.accept-head .accept-h-title { font-weight: 700; margin-right: 8px; }
 .accept-head .count { margin-right: auto; }
-.accept-scroll { padding-top: 8px; }
+.accept-scroll { flex: 0 0 auto; max-height: 36vh; padding-top: 8px; }
 .history-title {
   margin: 14px 0 6px;
   padding-left: 2px;
