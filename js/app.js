@@ -141,6 +141,20 @@
     el.addEventListener('mouseleave', cancel);
   }
 
+  // 让获得焦点的输入框自动滚入可视区（键盘上下箭头切换时也能看到当前行）
+  function ensureVisible(el) {
+    setTimeout(function () {
+      var sc = el.closest('.list-scroll');
+      if (!sc) { try { el.scrollIntoView({ block: 'nearest' }); } catch (e) {} return; }
+      var r = el.getBoundingClientRect();
+      var cr = sc.getBoundingClientRect();
+      if (r.top < cr.top + 4 || r.bottom > cr.bottom - 4) {
+        // 不在可视区域时，滚动使其居中
+        sc.scrollTop += (r.top + r.height / 2) - (cr.top + cr.height / 2);
+      }
+    }, 120);
+  }
+
   // ============ 主题 ============
   function applyTheme() {
     var s = Store.getSettings();
@@ -208,6 +222,8 @@
       qtyInput.addEventListener('focus', function () {
         // 进入输入时若仍是占位的 0，自动清空，省去先删 0 再输的操作
         if (this.value === '0') this.value = '';
+        // 键盘上下箭头切换时自动滚入可视区
+        ensureVisible(this);
       });
       qtyInput.addEventListener('input', function () {
         var v = parseFloat(this.value) || 0;
@@ -415,6 +431,12 @@
     // 数量修改：实时保存到 store 并更新小计
     $$('.oi-qty-input', detail).forEach(function (inp) {
       inp.addEventListener('click', function (e) { e.stopPropagation(); });
+      inp.addEventListener('focus', function () {
+        // 自动全选原有数字，直接输入即可覆盖，无需手动删除
+        this.select();
+        // 键盘上下箭头切换时自动滚入可视区
+        ensureVisible(this);
+      });
       inp.addEventListener('input', function () {
         var oid = this.dataset.oid, idx = +this.dataset.idx;
         var v = parseFloat(this.value) || 0;
