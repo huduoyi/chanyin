@@ -148,11 +148,36 @@
       if (!sc) { try { el.scrollIntoView({ block: 'nearest' }); } catch (e) {} return; }
       var r = el.getBoundingClientRect();
       var cr = sc.getBoundingClientRect();
-      if (r.top < cr.top + 4 || r.bottom > cr.bottom - 4) {
-        // 不在可视区域时，滚动使其居中
-        sc.scrollTop += (r.top + r.height / 2) - (cr.top + cr.height / 2);
+      var margin = 100; // 留出空间，让相邻行也可见，避免浏览器认为"没有更多输入框"
+      if (r.top < cr.top + 4) {
+        // 在上方不可见，向上滚动
+        sc.scrollTop -= (cr.top - r.top + margin);
+      } else if (r.bottom > cr.bottom - 4) {
+        // 在下方不可见，向下滚动
+        sc.scrollTop += (r.bottom - cr.bottom + margin);
       }
-    }, 120);
+    }, 80);
+  }
+
+  // 键盘方向键 / 回车键在数量输入框间切换
+  // 浏览器原生"下一个"在自定义滚动容器中遇到键盘遮挡区域会失效（箭头变灰），
+  // 这里手动接管方向键导航，程序化 focus 绕过该限制
+  function bindArrowNav() {
+    document.addEventListener('keydown', function (e) {
+      var isDown = e.key === 'ArrowDown' || e.key === 'Enter';
+      var isUp = e.key === 'ArrowUp';
+      if (!isDown && !isUp) return;
+      if (e.target.tagName !== 'INPUT' || e.target.type !== 'number') return;
+      var sc = e.target.closest('.list-scroll');
+      if (!sc) return;
+      var inputs = Array.prototype.slice.call(sc.querySelectorAll('input[type=number]'));
+      var idx = inputs.indexOf(e.target);
+      if (idx < 0) return;
+      var next = isDown ? idx + 1 : idx - 1;
+      if (next < 0 || next >= inputs.length) return;
+      e.preventDefault();
+      inputs[next].focus();
+    });
   }
 
   // ============ 主题 ============
@@ -215,13 +240,13 @@
         '<td class="c-name">' + esc(p.name) + '</td>' +
         '<td class="c-price">' + fmtMoney(p.price) + '</td>' +
         '<td class="c-unit">' + esc(p.unit) + '</td>' +
-        '<td class="c-qty"><input type="number" inputmode="decimal" step="1" min="0" value="' + (cs.qty || 0) + '" placeholder="0"></td>' +
+        '<td class="c-qty"><input type="number" inputmode="decimal" step="1" min="0" value="' + (cs.qty || 0) + '" placeholder="0" enterkeyhint="next"></td>' +
         '<td class="c-sel"><input type="checkbox"' + (cs.selected ? ' checked' : '') + '></td>';
       // 局部更新：只写 store，不重渲整表（防止键盘消失）
       var qtyInput = tr.querySelector('input[type=number]');
       qtyInput.addEventListener('focus', function () {
-        // 进入输入时若仍是占位的 0，自动清空，省去先删 0 再输的操作
-        if (this.value === '0') this.value = '';
+        // 自动全选原有数字，直接输入即可覆盖
+        this.select();
         // 键盘上下箭头切换时自动滚入可视区
         ensureVisible(this);
       });
@@ -405,7 +430,7 @@
         html += '<span class="oi-name">' + esc(it.name) + '</span>';
         // 编辑模式下数量可修改
         if (editing) {
-          html += '<span class="oi-qty"><input type="number" inputmode="decimal" step="0.1" min="0" value="' + it.qty + '" class="oi-qty-input" data-oid="' + o.id + '" data-idx="' + g.idx + '">' + esc(it.unit) + '</span>';
+          html += '<span class="oi-qty"><input type="number" inputmode="decimal" step="0.1" min="0" value="' + it.qty + '" class="oi-qty-input" data-oid="' + o.id + '" data-idx="' + g.idx + '" enterkeyhint="next">' + esc(it.unit) + '</span>';
         } else {
           html += '<span class="oi-qty">' + it.qty + esc(it.unit) + '</span>';
         }
@@ -1386,6 +1411,7 @@
       fillCatFilter();
       fillLibFilters();
       bindGlobal();
+      bindArrowNav();
       registerSW();
       switchTab(0);
     } catch (e) {
