@@ -192,6 +192,100 @@
     });
   }
 
+  // ============ 浮动上下导航按钮（终极保底方案）============
+  // iOS 自带输入法的"上一个/下一个"由系统 IME 控制，JS 无法拦截，
+  // 遇到键盘遮挡区域会拒绝移动焦点（箭头变灰）。
+  // 这对浮动按钮完全绕过 IME——点击后程序化 focus()，不受可见性检查限制。
+  var _lastNumInput = null;
+  function createFloatNav() {
+    var nav = document.createElement('div');
+    nav.id = 'float-nav';
+    nav.className = 'float-nav hidden';
+    nav.innerHTML =
+      '<button type="button" class="fn-btn fn-up" aria-label="上一项">▲</button>' +
+      '<button type="button" class="fn-btn fn-down" aria-label="下一项">▼</button>';
+    document.body.appendChild(nav);
+    var upBtn = nav.querySelector('.fn-up');
+    var downBtn = nav.querySelector('.fn-down');
+
+    function showNav() {
+      nav.classList.remove('hidden');
+      updatePos();
+      updateDisabled();
+    }
+    function hideNav() { nav.classList.add('hidden'); }
+    function updatePos() {
+      if (window.visualViewport) {
+        var kbH = window.innerHeight - window.visualViewport.height;
+        nav.style.bottom = (kbH + 10) + 'px';
+      }
+    }
+    function updateDisabled() {
+      if (!_lastNumInput) return;
+      var sc = _lastNumInput.closest('.list-scroll');
+      if (!sc) return;
+      var inputs = Array.prototype.slice.call(sc.querySelectorAll('input[type=number]'));
+      var idx = inputs.indexOf(_lastNumInput);
+      upBtn.disabled = idx <= 0;
+      downBtn.disabled = idx >= inputs.length - 1;
+    }
+    function navigate(dir) {
+      if (!_lastNumInput) return;
+      var sc = _lastNumInput.closest('.list-scroll');
+      if (!sc) return;
+      var inputs = Array.prototype.slice.call(sc.querySelectorAll('input[type=number]'));
+      var idx = inputs.indexOf(_lastNumInput);
+      if (idx < 0) return;
+      var next = dir === 'up' ? idx - 1 : idx + 1;
+      if (next < 0 || next >= inputs.length) return;
+      _lastNumInput = inputs[next];
+      inputs[next].focus();
+      setTimeout(function () { try { inputs[next].select(); } catch (e) {} }, 50);
+      ensureVisible(inputs[next]);
+      updateDisabled();
+    }
+
+    // 显示/隐藏：数量输入框获得焦点时显示
+    document.addEventListener('focusin', function (e) {
+      var t = e.target;
+      if (t.tagName === 'INPUT' && t.type === 'number' && t.closest('.list-scroll')) {
+        _lastNumInput = t;
+        showNav();
+      }
+    });
+    document.addEventListener('focusout', function () {
+      setTimeout(function () {
+        var a = document.activeElement;
+        if (a && a.tagName === 'INPUT' && a.type === 'number' && a.closest('.list-scroll')) return;
+        hideNav();
+      }, 250);
+    });
+
+    // touchstart + preventDefault 防止输入框失焦（iOS 关键）
+    function onNavPress(btn, dir) {
+      var touched = false;
+      btn.addEventListener('touchstart', function (e) {
+        e.preventDefault();
+        touched = true;
+        navigate(dir);
+      });
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (touched) { touched = false; return; }
+        navigate(dir);
+      });
+    }
+    onNavPress(upBtn, 'up');
+    onNavPress(downBtn, 'down');
+
+    // 键盘弹出/收起时更新位置
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', function () {
+        if (!nav.classList.contains('hidden')) updatePos();
+      });
+    }
+  }
+
   // ============ 主题 ============
   function applyTheme() {
     var s = Store.getSettings();
@@ -1414,6 +1508,7 @@
       fillLibFilters();
       bindGlobal();
       bindArrowNav();
+      createFloatNav();
       registerSW();
       switchTab(0);
     } catch (e) {
