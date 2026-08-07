@@ -148,11 +148,18 @@
       if (!sc) return;
       var r = el.getBoundingClientRect();
       var cr = sc.getBoundingClientRect();
-      var margin = 80;
+      // iOS 键盘弹出时布局视口不变，但 visualViewport 缩小
+      // getBoundingClientRect 返回布局坐标，容器底部可能延伸到键盘后面
+      // 用 visualViewport 的可见底部与容器底部取较小值，确保不被键盘/导航栏遮挡
+      var visBottom = (window.visualViewport
+        ? window.visualViewport.height + window.visualViewport.offsetTop
+        : cr.bottom);
+      var effectiveBottom = Math.min(cr.bottom, visBottom) - 10;
+      var margin = 20;
       if (r.top < cr.top + 4) {
         sc.scrollTop -= (cr.top - r.top + margin);
-      } else if (r.bottom > cr.bottom - 4) {
-        sc.scrollTop += (r.bottom - cr.bottom + margin);
+      } else if (r.bottom > effectiveBottom) {
+        sc.scrollTop += (r.bottom - effectiveBottom + margin);
       }
     }
     doScroll();                          // 立即滚动（键盘已展开时）
