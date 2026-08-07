@@ -141,35 +141,47 @@
     el.addEventListener('mouseleave', cancel);
   }
 
-  // 让获得焦点的输入框自动滚入可视区（键盘上下箭头切换时也能看到当前行）
+  // 让获得焦点的输入框自动滚入可视区
   function ensureVisible(el) {
-    setTimeout(function () {
+    function doScroll() {
       var sc = el.closest('.list-scroll');
-      if (!sc) { try { el.scrollIntoView({ block: 'nearest' }); } catch (e) {} return; }
+      if (!sc) return;
       var r = el.getBoundingClientRect();
       var cr = sc.getBoundingClientRect();
-      var margin = 100; // 留出空间，让相邻行也可见，避免浏览器认为"没有更多输入框"
+      var margin = 80;
       if (r.top < cr.top + 4) {
-        // 在上方不可见，向上滚动
         sc.scrollTop -= (cr.top - r.top + margin);
       } else if (r.bottom > cr.bottom - 4) {
-        // 在下方不可见，向下滚动
         sc.scrollTop += (r.bottom - cr.bottom + margin);
       }
-    }, 80);
+    }
+    doScroll();                          // 立即滚动（键盘已展开时）
+    setTimeout(doScroll, 150);           // 延迟再滚一次（键盘刚弹出时布局变化）
   }
 
-  // 键盘方向键 / 回车键在数量输入框间切换
-  // 浏览器原生"下一个"在自定义滚动容器中遇到键盘遮挡区域会失效（箭头变灰），
-  // 这里手动接管方向键导航，程序化 focus 绕过该限制
+  // 统一处理数量输入框的导航与聚焦行为
+  // - focusin：冒泡事件，能捕获所有来源的焦点变化（IME导航 / 方向键 / 点击 / 程序化focus）
+  // - keydown：手动接管方向键/回车/Tab，程序化 focus 绕过浏览器原生导航在键盘遮挡区失效的问题
   function bindArrowNav() {
+    // 任何数量输入框获得焦点时：自动全选 + 滚入可视区
+    document.addEventListener('focusin', function (e) {
+      var t = e.target;
+      if (t.tagName !== 'INPUT' || t.type !== 'number') return;
+      if (!t.closest('.list-scroll')) return;
+      // 仅对常用原料和记录详情的数量框自动全选
+      if (t.closest('#catalog-body') || t.classList.contains('oi-qty-input')) {
+        setTimeout(function () { try { t.select(); } catch (err) {} }, 0);
+      }
+      ensureVisible(t);
+    });
+    // 方向键 / 回车 / Tab 在数量输入框间切换
     document.addEventListener('keydown', function (e) {
-      var isDown = e.key === 'ArrowDown' || e.key === 'Enter';
-      var isUp = e.key === 'ArrowUp';
-      if (!isDown && !isUp) return;
       if (e.target.tagName !== 'INPUT' || e.target.type !== 'number') return;
       var sc = e.target.closest('.list-scroll');
       if (!sc) return;
+      var isDown = e.key === 'ArrowDown' || e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey);
+      var isUp = e.key === 'ArrowUp' || (e.key === 'Tab' && e.shiftKey);
+      if (!isDown && !isUp) return;
       var inputs = Array.prototype.slice.call(sc.querySelectorAll('input[type=number]'));
       var idx = inputs.indexOf(e.target);
       if (idx < 0) return;
@@ -244,12 +256,7 @@
         '<td class="c-sel"><input type="checkbox"' + (cs.selected ? ' checked' : '') + '></td>';
       // 局部更新：只写 store，不重渲整表（防止键盘消失）
       var qtyInput = tr.querySelector('input[type=number]');
-      qtyInput.addEventListener('focus', function () {
-        // 自动全选原有数字，直接输入即可覆盖
-        this.select();
-        // 键盘上下箭头切换时自动滚入可视区
-        ensureVisible(this);
-      });
+      // focus 全选 + ensureVisible 由 bindArrowNav 的 focusin 统一处理
       qtyInput.addEventListener('input', function () {
         var v = parseFloat(this.value) || 0;
         var s = Store.getCommonSel();
@@ -456,12 +463,7 @@
     // 数量修改：实时保存到 store 并更新小计
     $$('.oi-qty-input', detail).forEach(function (inp) {
       inp.addEventListener('click', function (e) { e.stopPropagation(); });
-      inp.addEventListener('focus', function () {
-        // 自动全选原有数字，直接输入即可覆盖，无需手动删除
-        this.select();
-        // 键盘上下箭头切换时自动滚入可视区
-        ensureVisible(this);
-      });
+      // focus 全选 + ensureVisible 由 bindArrowNav 的 focusin 统一处理
       inp.addEventListener('input', function () {
         var oid = this.dataset.oid, idx = +this.dataset.idx;
         var v = parseFloat(this.value) || 0;
