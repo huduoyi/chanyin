@@ -417,7 +417,7 @@ input, select { font-family: inherit; font-size: var(--font); }
 /* 浮动上下导航按钮（终极保底方案，不依赖键盘 IME 导航） */
 .float-nav {
   position: fixed;
-  right: 14px;
+  left: 14px;
   bottom: 300px;
   z-index: 9999;
   display: flex;

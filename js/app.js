@@ -186,7 +186,10 @@
       var idx = inputs.indexOf(e.target);
       if (idx < 0) return;
       var next = isDown ? idx + 1 : idx - 1;
-      if (next < 0 || next >= inputs.length) return;
+      if (next < 0 || next >= inputs.length) {
+        e.preventDefault(); // 到边界时也阻止默认行为，防止 Tab/Enter 跳到工具栏
+        return;
+      }
       e.preventDefault();
       inputs[next].focus();
     });
