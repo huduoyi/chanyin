@@ -207,6 +207,7 @@ input, select { font-family: inherit; font-size: var(--font); }
 .oi-name { flex: 1 1 auto; }
 .oi-price { color: var(--muted); width: 64px; text-align: right; }
 .oi-qty { width: 64px; text-align: right; }
+.oi-qty-input { width: 52px; text-align: right; border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; font-size: 14px; background: #fff; }
 .oi-sub { color: var(--theme); font-weight: 600; width: 72px; text-align: right; }
 .btn-copy { margin-top: 10px; width: 100%; border: 1px solid var(--line); background: #fafafa; border-radius: 12px; padding: 8px; color: var(--theme); font-weight: 600; }
 .order-actions { display: flex; gap: 8px; }
@@ -412,24 +413,3 @@ input, select { font-family: inherit; font-size: var(--font); }
   flex-direction: column;
   min-height: 0;
 }
-.accept-head .accept-h-title { font-weight: 700; margin-right: 8px; }
-.accept-head .count { margin-right: auto; }
-.accept-scroll { flex: 0 0 auto; max-height: 36vh; padding-top: 8px; }
-.history-title {
-  margin: 14px 0 6px;
-  padding-left: 2px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--muted);
-}
-.acc-card {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 8px 10px;
-  margin-bottom: 10px;
-}
-.acc-title { font-size: 13px; font-weight: 600; color: var(--theme); margin-bottom: 6px; }
-.grid.compact { border-radius: 10px; }
-.grid.compact tbody td { padding: 5px 6px; font-size: 13px; }
-.empty.muted, .muted.empty { color: var(--muted); }

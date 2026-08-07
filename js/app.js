@@ -37,11 +37,11 @@
   var DEFAULT_LIB_COLS = ['common', 'name', 'price', 'category'];
 
   var State = {
-    tabIndex: 1,
+    tabIndex: 0,
     catalog: { cat: '全部', search: '' },
     library: { cat: '全部', season: '全部', month: '全部', search: '' },
     ordersDate: null,
-    acceptAid: null,
+    ordersOid: null,
     ordersEditMode: false,
     editorId: null,
     searchFrom: null,
@@ -61,10 +61,6 @@
     });
   }
   function fmtMoney(n) { return '¥' + (typeof n === 'number' ? n.toFixed(2) : '0.00'); }
-  function nowTimeStr() {
-    var d = new Date();
-    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-  }
 
   var toastTimer;
   function toast(msg) {
@@ -161,7 +157,7 @@
       b.classList.toggle('active', +b.dataset.track === i);
     });
     if (i === 0) renderCatalog();
-    else if (i === 1) { renderAcceptance(); renderAcceptTree(); }
+    else if (i === 1) renderOrders();
     else if (i === 2) renderLibrary();
     else if (i === 3) renderSettings();
   }
@@ -260,114 +256,19 @@
       items: items
     });
     Store.setOrders(orders);
+    State.ordersOid = orders[0].id;
     // 清零数量，并取消所有选中状态
     Object.keys(sel).forEach(function (id) { if (sel[id]) { sel[id].qty = 0; sel[id].selected = false; } });
     Store.setCommonSel(sel);
     renderCatalog();
-    renderAcceptance();
+    renderOrders();
     toast(type === 'inventory' ? '已生成盘存单' : '已下单');
   }
 
 
 
-  // ============ Tab2 验收记录 ============
-  // 顶部「编辑」开关：开启后，记录列表与详情里的复制 / 导出 / 删除操作才显示
-  function updateEditToggle() {
-    var et = $('#orders-edit-toggle');
-    if (!et) return;
-    et.textContent = State.ordersEditMode ? '完成' : '编辑';
-    et.classList.toggle('active', State.ordersEditMode);
-  }
-
-  // 汇总「当天」所有下单原料（按 productId 合并，数量求和）—— 验收录入的数据源
-  function getTodayOrderItems() {
-    var today = Store.nowDateStr();
-    var orders = Store.getOrders().filter(function (o) { return o.date === today; });
-    var map = {};
-    orders.forEach(function (o) {
-      (o.items || []).forEach(function (it) {
-        var id = it.productId;
-        if (!map[id]) map[id] = { productId: id, name: it.name, unit: it.unit, price: it.price, category: it.category || '', qty: 0 };
-        map[id].qty += (it.qty || 0);
-      });
-    });
-    return Object.keys(map).map(function (k) { return map[k]; });
-  }
-
-  // 验收录入：默认显示当天下单原料，数量可改、可勾选
-  function renderAcceptance() {
-    var body = $('#accept-body');
-    if (!body) return;
-    var today = Store.nowDateStr();
-    var items = getTodayOrderItems();
-    var draftAll = Store.getAcceptDraft();
-    var draft = draftAll[today] || {};
-    var cnt = $('#accept-count');
-    if (cnt) cnt.textContent = items.length + ' 项';
-    if (!items.length) {
-      body.innerHTML = '<tr><td colspan="5" class="empty-cell">今天还没有下单记录，无法验收</td></tr>';
-      renderAcceptTree();
-      return;
-    }
-    var frag = document.createDocumentFragment();
-    items.forEach(function (it) {
-      var d = draft[it.productId] || { qty: it.qty, checked: false };
-      var tr = document.createElement('tr');
-      tr.dataset.id = it.productId;
-      tr.innerHTML =
-        '<td class="c-name">' + esc(it.name) + '</td>' +
-        '<td class="c-price">' + fmtMoney(it.price) + '</td>' +
-        '<td class="c-unit">' + esc(it.unit) + '</td>' +
-        '<td class="c-qty"><input type="number" inputmode="decimal" step="1" min="0" value="' + (d.qty || 0) + '" placeholder="0"></td>' +
-        '<td class="c-sel"><input type="checkbox"' + (d.checked ? ' checked' : '') + '></td>';
-      var qtyInput = tr.querySelector('input[type=number]');
-      qtyInput.addEventListener('input', function () {
-        var v = parseFloat(this.value) || 0;
-        var da = Store.getAcceptDraft();
-        da[today] = da[today] || {};
-        da[today][it.productId] = da[today][it.productId] || { qty: it.qty, checked: false };
-        da[today][it.productId].qty = v;
-        Store.setAcceptDraft(da);
-      });
-      tr.querySelector('input[type=checkbox]').addEventListener('change', function () {
-        var da = Store.getAcceptDraft();
-        da[today] = da[today] || {};
-        da[today][it.productId] = da[today][it.productId] || { qty: it.qty, checked: false };
-        da[today][it.productId].checked = this.checked;
-        Store.setAcceptDraft(da);
-      });
-      frag.appendChild(tr);
-    });
-    body.innerHTML = '';
-    body.appendChild(frag);
-    renderAcceptTree();
-  }
-
-  // 保存验收：把勾选项存为一条验收记录（同一天可多次保存）
-  function saveAccept() {
-    var today = Store.nowDateStr();
-    var draftAll = Store.getAcceptDraft();
-    var draft = draftAll[today] || {};
-    var items = getTodayOrderItems();
-    var picked = [];
-    items.forEach(function (it) {
-      var d = draft[it.productId];
-      if (d && d.checked) {
-        picked.push({ productId: it.productId, name: it.name, unit: it.unit, price: it.price, category: it.category || '', qty: (d.qty != null ? d.qty : it.qty) });
-      }
-    });
-    if (!picked.length) { toast('请先勾选要验收的项'); return; }
-    var accepts = Store.getAccepts();
-    accepts.unshift({ id: uid(), date: today, time: nowTimeStr(), items: picked });
-    Store.setAccepts(accepts);
-    var da = Store.getAcceptDraft(); delete da[today]; Store.setAcceptDraft(da);
-    Store.flush();
-    toast('已保存验收（' + picked.length + ' 项）');
-    renderAcceptance();
-  }
-
-  // ============ 验收历史：年 / 月 / 日 三级目录 ============
-  function countAccepts(map) {
+  // ============ Tab2 订单记录 ============
+  function countOrders(map) {
     var n = 0;
     Object.keys(map).forEach(function (m) {
       Object.keys(map[m]).forEach(function (d) { n += map[m][d].length; });
@@ -375,69 +276,67 @@
     return n;
   }
 
-  // 编辑模式下，每个时段（年 / 月 / 日）显示「导出 / 删除」按钮
-  function acceptPeriodActs() {
+  // 仅当顶部「编辑」开关打开时，才显示各时段的「导出/删除」按钮
+  function periodActs() {
     if (!State.ordersEditMode) return '';
     return '<span class="tree-acts"><button class="ta-exp">导出</button><button class="ta-del">删除</button></span>';
   }
 
-  function renderAcceptTree() {
-    var tree = $('#accept-tree');
+  function renderOrders() {
+    var tree = $('#orders-tree');
     if (!tree) return;
-    // 同步价格开关状态
-    var s = Store.getSettings();
-    var tp = $('#tog-price'); if (tp) tp.checked = !!s.orderShowPrice;
-    var accepts = Store.getAccepts();
+    var orders = Store.getOrders();
+    // 三级分组 年 > 月 > 日
     var byY = {};
-    accepts.forEach(function (a) {
-      var p = (a.date || '').split('-');
+    orders.forEach(function (o) {
+      var p = (o.date || '').split('-');
       var y = p[0] || '?', m = p[1] || '?', d = p[2] || '?';
       byY[y] = byY[y] || {}; byY[y][m] = byY[y][m] || {};
-      (byY[y][m][d] = byY[y][m][d] || []).push(a);
+      (byY[y][m][d] = byY[y][m][d] || []).push(o);
     });
     tree.innerHTML = '';
     Object.keys(byY).sort().reverse().forEach(function (y) {
       var yEl = document.createElement('div'); yEl.className = 'tree-y';
       var yHead = document.createElement('div'); yHead.className = 'tree-head tree-y-head';
-      yHead.innerHTML = '<span class="tw">▾</span><span class="tt">' + y + ' 年 <span class="cnt">' + countAccepts(byY[y]) + '</span></span>' + acceptPeriodActs();
+      yHead.innerHTML = '<span class="tw">▾</span><span class="tt">' + y + ' 年 <span class="cnt">' + countOrders(byY[y]) + '</span></span>' + periodActs();
       var yBody = document.createElement('div'); yBody.className = 'tree-body';
       yHead.addEventListener('click', function () { yEl.classList.toggle('collapsed'); });
       var ye = yHead.querySelector('.ta-exp'), yd = yHead.querySelector('.ta-del');
-      if (ye) ye.addEventListener('click', function (e) { e.stopPropagation(); exportAcceptPeriod(function (a) { return (a.date || '').indexOf(y + '-') === 0; }, y + '年'); });
-      if (yd) yd.addEventListener('click', function (e) { e.stopPropagation(); deleteAcceptPeriod(function (a) { return (a.date || '').indexOf(y + '-') === 0; }, y + ' 年'); });
+      if (ye) ye.addEventListener('click', function (e) { e.stopPropagation(); exportPeriod(function (o) { return (o.date || '').indexOf(y + '-') === 0; }, y + '年'); });
+      if (yd) yd.addEventListener('click', function (e) { e.stopPropagation(); deletePeriod(function (o) { return (o.date || '').indexOf(y + '-') === 0; }, y + ' 年'); });
       Object.keys(byY[y]).sort().reverse().forEach(function (m) {
         var mEl = document.createElement('div'); mEl.className = 'tree-m';
         var mHead = document.createElement('div'); mHead.className = 'tree-head tree-m-head';
-        mHead.innerHTML = '<span class="tw">▾</span><span class="tt">' + m + ' 月</span>' + acceptPeriodActs();
+        mHead.innerHTML = '<span class="tw">▾</span><span class="tt">' + m + ' 月</span>' + periodActs();
         var mBody = document.createElement('div'); mBody.className = 'tree-body';
         mHead.addEventListener('click', function () { mEl.classList.toggle('collapsed'); });
         var me = mHead.querySelector('.ta-exp'), md = mHead.querySelector('.ta-del');
-        if (me) me.addEventListener('click', function (e) { e.stopPropagation(); exportAcceptPeriod(function (a) { return (a.date || '').indexOf(y + '-' + m + '-') === 0; }, y + '年' + m + '月'); });
-        if (md) md.addEventListener('click', function (e) { e.stopPropagation(); deleteAcceptPeriod(function (a) { return (a.date || '').indexOf(y + '-' + m + '-') === 0; }, y + ' 年 ' + m + ' 月'); });
+        if (me) me.addEventListener('click', function (e) { e.stopPropagation(); exportPeriod(function (o) { return (o.date || '').indexOf(y + '-' + m + '-') === 0; }, y + '年' + m + '月'); });
+        if (md) md.addEventListener('click', function (e) { e.stopPropagation(); deletePeriod(function (o) { return (o.date || '').indexOf(y + '-' + m + '-') === 0; }, y + ' 年 ' + m + ' 月'); });
         Object.keys(byY[y][m]).sort().reverse().forEach(function (d) {
           var dayKey = y + '-' + m + '-' + d;
           var dEl = document.createElement('div'); dEl.className = 'tree-d';
           var dHead = document.createElement('div'); dHead.className = 'tree-head tree-d-head';
-          dHead.innerHTML = '<span class="tw">▾</span>' + d + ' 日' + acceptPeriodActs();
+          dHead.innerHTML = '<span class="tw">▾</span>' + d + ' 日' + periodActs();
           var dBody = document.createElement('div'); dBody.className = 'tree-body';
           dHead.addEventListener('click', function () { dEl.classList.toggle('collapsed'); });
           var de = dHead.querySelector('.ta-exp'), dd = dHead.querySelector('.ta-del');
-          if (de) de.addEventListener('click', function (e) { e.stopPropagation(); exportAcceptPeriod(function (a) { return a.date === dayKey; }, y + '年' + m + '月' + d + '日'); });
-          if (dd) dd.addEventListener('click', function (e) { e.stopPropagation(); deleteAcceptPeriod(function (a) { return a.date === dayKey; }, y + ' 年 ' + m + ' 月 ' + d + ' 日'); });
-          bindLongPress(dHead, 600, function () { copyAcceptDayTSV(dayKey); });
-          byY[y][m][d].forEach(function (a) {
+          if (de) de.addEventListener('click', function (e) { e.stopPropagation(); exportPeriod(function (o) { return o.date === dayKey; }, y + '年' + m + '月' + d + '日'); });
+          if (dd) dd.addEventListener('click', function (e) { e.stopPropagation(); deletePeriod(function (o) { return o.date === dayKey; }, y + ' 年 ' + m + ' 月 ' + d + ' 日'); });
+          bindLongPress(dHead, 600, function () { exportDateCSV(dayKey); });
+          byY[y][m][d].forEach(function (o) {
             var node = document.createElement('div');
-            node.className = 'tree-order' + (State.acceptAid === a.id ? ' active' : '');
-            node.dataset.aid = a.id;
-            var label = '验收 · ' + (a.time || '');
+            node.className = 'tree-order' + (State.ordersOid === o.id ? ' active' : '');
+            node.dataset.oid = o.id;
+            var label = (o.type === 'inventory' ? '盘存 · ' : '订单 · ') + o.title;
             node.innerHTML = '<span class="to-label">' + esc(label) + '</span>';
             node.addEventListener('click', function () {
-              State.acceptAid = a.id;
+              State.ordersOid = o.id;
               $$('.tree-order', tree).forEach(function (n) { n.classList.remove('active'); });
               node.classList.add('active');
-              showAcceptDetail(a.id);
+              showOrderDetail(o.id);
             });
-            bindLongPress(node, 600, function () { copyAcceptTSV(a.id); });
+            bindLongPress(node, 600, function () { exportOrderCSV(o.id); });
             dBody.appendChild(node);
           });
           dEl.appendChild(dHead); dEl.appendChild(dBody);
@@ -449,35 +348,51 @@
       yEl.appendChild(yHead); yEl.appendChild(yBody);
       tree.appendChild(yEl);
     });
-    if (!State.acceptAid || !accepts.some(function (a) { return a.id === State.acceptAid; })) {
-      State.acceptAid = accepts.length ? accepts[0].id : null;
+    if (!State.ordersOid || !orders.some(function (o) { return o.id === State.ordersOid; })) {
+      State.ordersOid = orders.length ? orders[0].id : null;
     }
-    if (State.acceptAid) showAcceptDetail(State.acceptAid);
-    else $('#accept-detail').innerHTML = '<div class="empty">暂无验收记录</div>';
+    if (State.ordersOid) showOrderDetail(State.ordersOid);
+    else $('#orders-detail').innerHTML = '<div class="empty">暂无订单</div>';
+    // 反映价格开关状态
+    var s = Store.getSettings();
+    var tp = $('#tog-price'); if (tp) tp.checked = !!s.orderShowPrice;
     updateEditToggle();
   }
 
-  // 验收详情：按类目分组，支持「复制本类 / 复制全部 / 导出 / 删除」
-  function showAcceptDetail(acceptId) {
-    var detail = $('#accept-detail');
-    var a = Store.getAccepts().find(function (x) { return x.id === acceptId; });
-    if (!a) { detail.innerHTML = '<div class="empty">暂无记录</div>'; return; }
+  // 顶部「编辑」开关：开启后，记录列表与详情里的复制/导出/删除操作才显示
+  function updateEditToggle() {
+    var et = $('#orders-edit-toggle');
+    if (!et) return;
+    et.textContent = State.ordersEditMode ? '完成' : '编辑';
+    et.classList.toggle('active', State.ordersEditMode);
+  }
+
+  // 订单详情：按类目分组，编辑模式下数量可修改、可复制 / 导出 / 删除
+  function showOrderDetail(orderId) {
+    var detail = $('#orders-detail');
+    var o = Store.getOrders().find(function (x) { return x.id === orderId; });
+    if (!o) { detail.innerHTML = '<div class="empty">暂无订单</div>'; return; }
     var s = Store.getSettings();
     var showPrice = !!s.orderShowPrice;
     var editing = State.ordersEditMode;
     var html = '<div class="order-block">';
-    html += '<div class="order-title">验收 · ' + esc(a.date) + ' ' + esc(a.time || '') + '</div>';
+    html += '<div class="order-title">' + esc(o.title) + '</div>';
     var groups = {};
-    a.items.forEach(function (it, idx) { (groups[it.category] = groups[it.category] || []).push({ it: it, idx: idx }); });
+    o.items.forEach(function (it, idx) { (groups[it.category] = groups[it.category] || []).push({ it: it, idx: idx }); });
     Object.keys(groups).forEach(function (cat) {
       html += '<div class="order-cat-row"><span class="order-cat">' + esc(cat) + '</span>' +
-        '<button class="btn-copy cat" data-aid="' + a.id + '" data-cat="' + esc(cat) + '">复制本类</button></div>';
+        '<button class="btn-copy cat" data-oid="' + o.id + '" data-cat="' + esc(cat) + '">复制本类</button></div>';
       groups[cat].forEach(function (g) {
         var it = g.it, sub = it.price * it.qty;
         html += '<div class="order-item">';
-        if (editing) html += '<button class="od-del-btn" data-aid="' + a.id + '" data-idx="' + g.idx + '">删除</button>';
+        if (editing) html += '<button class="od-del-btn" data-oid="' + o.id + '" data-idx="' + g.idx + '">删除</button>';
         html += '<span class="oi-name">' + esc(it.name) + '</span>';
-        html += '<span class="oi-qty">' + it.qty + esc(it.unit) + '</span>';
+        // 编辑模式下数量可修改
+        if (editing) {
+          html += '<span class="oi-qty"><input type="number" inputmode="decimal" step="0.1" min="0" value="' + it.qty + '" class="oi-qty-input" data-oid="' + o.id + '" data-idx="' + g.idx + '">' + esc(it.unit) + '</span>';
+        } else {
+          html += '<span class="oi-qty">' + it.qty + esc(it.unit) + '</span>';
+        }
         if (showPrice) {
           html += '<span class="oi-price">' + fmtMoney(it.price) + '</span>';
           html += '<span class="oi-sub">' + fmtMoney(sub) + '</span>';
@@ -487,130 +402,173 @@
     });
     if (editing) {
       html += '<div class="order-actions">';
-      html += '<button class="btn-copy" data-aid="' + a.id + '">复制全部</button>';
-      html += '<button class="btn-copy export" data-aid="' + a.id + '">导出文件</button>';
-      html += '<button class="btn-copy xlsx" data-aid="' + a.id + '">导出Excel</button>';
-      html += '<button class="btn-accept-del danger" data-aid="' + a.id + '">删除记录</button>';
+      html += '<button class="btn-copy" data-oid="' + o.id + '">复制全部</button>';
+      html += '<button class="btn-copy export" data-oid="' + o.id + '">导出文件</button>';
+      html += '<button class="btn-copy xlsx" data-oid="' + o.id + '">导出Excel</button>';
+      html += '<button class="btn-order-del danger" data-oid="' + o.id + '">删除订单</button>';
       html += '</div>';
     } else {
-      html += '<div class="edit-hint">点上方「编辑」可复制 / 导出 / 删除记录</div>';
+      html += '<div class="edit-hint">点上方「编辑」可修改数量 / 复制 / 导出 / 删除记录</div>';
     }
     html += '</div>';
     detail.innerHTML = html;
-    $$('.od-del-btn', detail).forEach(function (b) {
-      b.addEventListener('click', function () { deleteAcceptItem(b.dataset.aid, +b.dataset.idx); });
+    // 数量修改：实时保存到 store 并更新小计
+    $$('.oi-qty-input', detail).forEach(function (inp) {
+      inp.addEventListener('click', function (e) { e.stopPropagation(); });
+      inp.addEventListener('input', function () {
+        var oid = this.dataset.oid, idx = +this.dataset.idx;
+        var v = parseFloat(this.value) || 0;
+        var orders = Store.getOrders();
+        var oi = orders.findIndex(function (x) { return x.id === oid; });
+        if (oi >= 0 && orders[oi].items[idx]) {
+          orders[oi].items[idx].qty = v;
+          Store.setOrders(orders);
+          var subSpan = this.closest('.order-item').querySelector('.oi-sub');
+          if (subSpan) subSpan.textContent = fmtMoney(orders[oi].items[idx].price * v);
+        }
+      });
     });
-    $$('.btn-accept-del', detail).forEach(function (b) {
-      b.addEventListener('click', function () { deleteAcceptWhole(b.dataset.aid); });
+    $$('.od-del-btn', detail).forEach(function (b) {
+      b.addEventListener('click', function () { deleteOrderItem(b.dataset.oid, +b.dataset.idx); });
+    });
+    $$('.btn-order-del', detail).forEach(function (b) {
+      b.addEventListener('click', function () { deleteOrderWhole(b.dataset.oid); });
     });
     $$('.btn-copy', detail).forEach(function (b) {
       b.addEventListener('click', function () {
-        if (b.classList.contains('xlsx')) exportAcceptXLSX(b.dataset.aid);
-        else if (b.classList.contains('export')) exportAcceptFile(b.dataset.aid);
-        else if (b.classList.contains('cat')) copyAcceptCSV(b.dataset.aid, b.dataset.cat);
-        else copyAcceptCSV(b.dataset.aid);
+        if (b.classList.contains('xlsx')) exportOrderXLSX(b.dataset.oid);
+        else if (b.classList.contains('export')) exportOrderFile(b.dataset.oid);
+        else if (b.classList.contains('cat')) copyOrderCSV(b.dataset.oid, b.dataset.cat);
+        else copyOrderCSV(b.dataset.oid);
       });
     });
   }
 
-  // ---------- 复制 / 导出 / 删除 验收记录 ----------
-  function copyAcceptCSV(acceptId, cat) {
-    var a = Store.getAccepts().find(function (x) { return x.id === acceptId; });
-    if (!a) return;
-    var items = cat ? a.items.filter(function (i) { return i.category === cat; }) : a.items;
-    var rows = items.map(function (it) { return [it.name, it.unit, it.qty]; });
-    Store.copyTSV(rows).then(function () { toast(cat ? '已复制「' + cat + '」' : '已复制全部'); }).catch(function () { toast('复制失败'); });
+  // 删除整条记录（二次确认）
+  function deleteOrderWhole(orderId) {
+    if (!confirm('确定删除这条记录吗？此操作不可恢复。')) return;
+    var orders = Store.getOrders();
+    var rest = orders.filter(function (o) { return o.id !== orderId; });
+    Store.setOrders(rest);
+    if (State.ordersOid === orderId) State.ordersOid = null;
+    renderOrders();
+    toast('已删除记录');
   }
-  function copyAcceptTSV(acceptId) {
-    var a = Store.getAccepts().find(function (x) { return x.id === acceptId; });
-    if (!a) return;
-    var headers = ['单据', '名称', '单价', '数量', '单位', '小计', '种类'];
-    var rows = a.items.map(function (it) { return ['验收', it.name, it.price, it.qty, it.unit, (it.price * it.qty), it.category]; });
-    Store.copyTSV(rows, headers).then(function () { toast('已复制验收'); }).catch(function () { toast('复制失败'); });
+
+  // 删除订单项；空订单自动移除
+  function deleteOrderItem(orderId, idx) {
+    var orders = Store.getOrders();
+    var oi = orders.findIndex(function (o) { return o.id === orderId; });
+    if (oi < 0) return;
+    orders[oi].items.splice(idx, 1);
+    if (!orders[oi].items.length) orders.splice(oi, 1);
+    Store.setOrders(orders);
+    renderOrders();
   }
-  function copyAcceptDayTSV(date) {
-    var accepts = Store.getAccepts().filter(function (a) { return a.date === date; });
-    var headers = ['单据', '名称', '单价', '数量', '单位', '小计', '种类'];
-    var rows = [];
-    accepts.forEach(function (a) {
-      a.items.forEach(function (it) { rows.push(['验收 ' + (a.time || ''), it.name, it.price, it.qty, it.unit, (it.price * it.qty), it.category]); });
-    });
-    Store.copyTSV(rows, headers).then(function () { toast('已复制 ' + date); }).catch(function () { toast('复制失败'); });
-  }
-  function exportAcceptFile(acceptId) {
-    var a = Store.getAccepts().find(function (x) { return x.id === acceptId; });
-    if (!a) return;
-    var headers = ['单据', '名称', '单价', '数量', '单位', '小计', '种类'];
-    var rows = a.items.map(function (it) { return ['验收', it.name, it.price, it.qty, it.unit, (it.price * it.qty), it.category]; });
-    var fname = '验收_' + (a.date || 'export') + '_' + (a.time || '') + '.csv';
-    Store.downloadCSV(fname, rows, headers);
-    toast('已导出 ' + fname);
-  }
-  function exportAcceptXLSX(acceptId) {
-    var a = Store.getAccepts().find(function (x) { return x.id === acceptId; });
-    if (!a) return;
-    if (typeof XLSX === 'undefined') { exportAcceptFile(acceptId); return; }
-    var aoa = [['验收记录 · ' + (a.date || '') + ' ' + (a.time || '')], ['名称', '单价(元)', '数量', '单位', '小计(元)', '种类']];
-    var total = 0;
-    a.items.forEach(function (it) { var sub = it.price * it.qty; total += sub; aoa.push([it.name, it.price, it.qty, it.unit, sub, it.category]); });
-    aoa.push(['合计', '', '', '', total.toFixed(2), '']);
-    var ws = XLSX.utils.aoa_to_sheet(aoa);
-    var wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '验收');
-    XLSX.writeFile(wb, '验收_' + (a.date || 'export') + '_' + (a.time || '') + '.xlsx');
-    toast('已导出 Excel：验收');
-  }
-  function exportAcceptPeriod(match, label) {
-    var accepts = Store.getAccepts().filter(match);
-    if (!accepts.length) { toast('该时段暂无记录'); return; }
+
+  // 按年/月导出：把匹配的全部单据（订单+盘存）导出为一个 Excel(.xlsx)；无 XLSX 时回退 CSV
+  function exportPeriod(match, label) {
+    var orders = Store.getOrders().filter(match);
+    if (!orders.length) { toast('该时段暂无记录'); return; }
     if (typeof XLSX !== 'undefined') {
-      var aoa = [['验收记录导出 · ' + label], ['日期', '名称', '单价(元)', '数量', '单位', '小计(元)', '种类']];
+      var aoa = [['记录导出 · ' + label], ['单据', '名称', '单价(元)', '数量', '单位', '小计(元)', '种类']];
       var total = 0;
-      accepts.forEach(function (a) {
-        a.items.forEach(function (it) { var sub = it.price * it.qty; total += sub; aoa.push([a.date + ' ' + (a.time || ''), it.name, it.price, it.qty, it.unit, sub, it.category]); });
+      orders.forEach(function (o) {
+        o.items.forEach(function (it) {
+          var sub = it.price * it.qty; total += sub;
+          aoa.push([o.title, it.name, it.price, it.qty, it.unit, sub, it.category]);
+        });
       });
       aoa.push(['合计', '', '', '', '', total.toFixed(2), '']);
       var ws = XLSX.utils.aoa_to_sheet(aoa);
       var wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, '验收');
-      XLSX.writeFile(wb, '验收_' + label + '.xlsx');
+      XLSX.utils.book_append_sheet(wb, ws, '记录');
+      XLSX.writeFile(wb, '记录_' + label + '.xlsx');
       toast('已导出 Excel：' + label);
     } else {
-      var headers = ['日期', '名称', '单价', '数量', '单位', '小计', '种类'];
+      var headers = ['单据', '名称', '单价', '数量', '单位', '小计', '种类'];
       var rows = [];
-      accepts.forEach(function (a) { a.items.forEach(function (it) { rows.push([a.date + ' ' + (a.time || ''), it.name, it.price, it.qty, it.unit, (it.price * it.qty), it.category]); }); });
-      Store.downloadCSV('验收_' + label + '.csv', rows, headers);
+      orders.forEach(function (o) {
+        o.items.forEach(function (it) { rows.push([o.title, it.name, it.price, it.qty, it.unit, (it.price * it.qty), it.category]); });
+      });
+      Store.downloadCSV('记录_' + label + '.csv', rows, headers);
       toast('已导出 ' + label);
     }
   }
-  function deleteAcceptPeriod(match, label) {
-    var all = Store.getAccepts();
+
+  // 按年/月删除：删除匹配的全部单据（二次确认）
+  function deletePeriod(match, label) {
+    var all = Store.getOrders();
     var hit = all.filter(match);
     if (!hit.length) { toast('该时段暂无记录'); return; }
-    if (!confirm('确定删除「' + label + '」的全部 ' + hit.length + ' 条验收记录吗？此操作不可恢复。')) return;
-    var rest = all.filter(function (a) { return !match(a); });
-    Store.setAccepts(rest);
-    if (State.acceptAid && !rest.some(function (a) { return a.id === State.acceptAid; })) State.acceptAid = null;
-    renderAcceptTree();
+    if (!confirm('确定删除「' + label + '」的全部 ' + hit.length + ' 条记录吗？此操作不可恢复。')) return;
+    var rest = all.filter(function (o) { return !match(o); });
+    Store.setOrders(rest);
+    if (State.ordersOid && !rest.some(function (o) { return o.id === State.ordersOid; })) State.ordersOid = null;
+    renderOrders();
     toast('已删除「' + label + '」');
   }
-  function deleteAcceptWhole(acceptId) {
-    if (!confirm('确定删除这条验收记录吗？此操作不可恢复。')) return;
-    var accepts = Store.getAccepts();
-    var rest = accepts.filter(function (a) { return a.id !== acceptId; });
-    Store.setAccepts(rest);
-    if (State.acceptAid === acceptId) State.acceptAid = null;
-    renderAcceptTree();
-    toast('已删除记录');
+
+  // 复制为 TSV（制表符分隔）→ 直接粘进 Excel / WPS / 在线表格会自动分列
+  function copyOrderCSV(orderId, cat) {
+    var o = Store.getOrders().find(function (x) { return x.id === orderId; });
+    if (!o) return;
+    var items = cat ? o.items.filter(function (i) { return i.category === cat; }) : o.items;
+    var rows = items.map(function (it) { return [it.name, it.unit, it.qty]; });
+    Store.copyTSV(rows).then(function () { toast(cat ? '已复制「' + cat + '」' : '已复制全部'); }).catch(function () { toast('复制失败'); });
   }
-  function deleteAcceptItem(acceptId, idx) {
-    var accepts = Store.getAccepts();
-    var ai = accepts.findIndex(function (a) { return a.id === acceptId; });
-    if (ai < 0) return;
-    accepts[ai].items.splice(idx, 1);
-    if (!accepts[ai].items.length) accepts.splice(ai, 1);
-    Store.setAccepts(accepts);
-    renderAcceptTree();
+
+  // 长按单个订单/盘存单 → 复制为 TSV 到剪贴板
+  function exportOrderCSV(orderId) {
+    var o = Store.getOrders().find(function (x) { return x.id === orderId; });
+    if (!o) return;
+    var headers = ['单据', '名称', '单价', '数量', '单位', '小计', '种类'];
+    var rows = o.items.map(function (it) { return [o.title, it.name, it.price, it.qty, it.unit, (it.price * it.qty), it.category]; });
+    Store.copyTSV(rows, headers).then(function () { toast('已复制 ' + (o.type === 'inventory' ? '盘存' : '订单')); }).catch(function () { toast('复制失败'); });
+  }
+
+  // 长按日期 → 复制当天全部单据为 TSV 到剪贴板
+  function exportDateCSV(date) {
+    var orders = Store.getOrders().filter(function (o) { return o.date === date; });
+    var headers = ['单据', '名称', '单价', '数量', '单位', '小计', '种类'];
+    var rows = [];
+    orders.forEach(function (o) {
+      o.items.forEach(function (it) {
+        rows.push([o.title, it.name, it.price, it.qty, it.unit, (it.price * it.qty), it.category]);
+      });
+    });
+    Store.copyTSV(rows, headers).then(function () { toast('已复制 ' + date); }).catch(function () { toast('复制失败'); });
+  }
+
+  // 导出当前单据为 CSV 文件（Excel / WPS 直接打开）
+  function exportOrderFile(orderId) {
+    var o = Store.getOrders().find(function (x) { return x.id === orderId; });
+    if (!o) return;
+    var headers = ['单据', '名称', '单价', '数量', '单位', '小计', '种类'];
+    var rows = o.items.map(function (it) { return [o.title, it.name, it.price, it.qty, it.unit, (it.price * it.qty), it.category]; });
+    var fname = '记录_' + (o.date || 'export') + (o.type === 'inventory' ? '_盘存' : '') + '.csv';
+    Store.downloadCSV(fname, rows, headers);
+    toast('已导出 ' + fname);
+  }
+
+  // 导出当前单据（订单/盘存）为真正的 Excel(.xlsx) 文件（离线可用，依赖内置 SheetJS）
+  function exportOrderXLSX(orderId) {
+    var o = Store.getOrders().find(function (x) { return x.id === orderId; });
+    if (!o) return;
+    if (typeof XLSX === 'undefined') { toast('Excel 组件未加载'); return; }
+    var kind = (o.type === 'inventory') ? '盘存' : '订单';
+    var aoa = [[kind + ' · ' + (o.date || '') + ' · ' + o.title],
+               ['名称', '单价(元)', '数量', '单位', '小计(元)', '种类']];
+    o.items.forEach(function (it) {
+      aoa.push([it.name, it.price, it.qty, it.unit, it.price * it.qty, it.category]);
+    });
+    var total = o.items.reduce(function (s, it) { return s + it.price * it.qty; }, 0);
+    aoa.push(['合计', '', '', '', total.toFixed(2), '']);
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, kind);
+    XLSX.writeFile(wb, kind + '_' + (o.date || 'export') + '_' + o.title + '.xlsx');
+    toast('已导出 Excel：' + kind);
   }
 
   // ============ Tab3 原料库 ============
@@ -1273,20 +1231,17 @@
     $('#btn-order').addEventListener('click', function () { doOrder('order'); });
     $('#btn-inventory').addEventListener('click', function () { doOrder('inventory'); });
 
-    // 验收记录：显示价格 / 编辑
+    // orders
     $('#tog-price').addEventListener('change', function () {
       var s = Store.getSettings(); s.orderShowPrice = this.checked; Store.setSettings(s);
-      showAcceptDetail(State.acceptAid);
+      showOrderDetail(State.ordersOid);
     });
     var etBtn = $('#orders-edit-toggle');
     if (etBtn) etBtn.addEventListener('click', function () {
       State.ordersEditMode = !State.ordersEditMode;
       updateEditToggle();
-      renderAcceptTree();
+      renderOrders();
     });
-
-    var saveAcc = $('#btn-save-accept');
-    if (saveAcc) saveAcc.addEventListener('click', function () { saveAccept(); });
 
     // library —— 三筛选联动：
     //  选分类 → 季节、月份都重置全部；选季节 → 月份重置全部；选月份 → 季节重置全部
@@ -1410,7 +1365,7 @@
       fillLibFilters();
       bindGlobal();
       registerSW();
-      switchTab(1);
+      switchTab(0);
     } catch (e) {
       console.error('[init] error', e);
       var app = $('#app');
