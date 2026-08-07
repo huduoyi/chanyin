@@ -413,31 +413,3 @@ input, select { font-family: inherit; font-size: var(--font); }
   flex-direction: column;
   min-height: 0;
 }
-
-/* 浮动上下导航按钮（终极保底方案，不依赖键盘 IME 导航） */
-.float-nav {
-  position: fixed;
-  left: 14px;
-  bottom: 300px;
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  transition: opacity .18s ease;
-  opacity: 1;
-}
-.float-nav.hidden { opacity: 0; pointer-events: none; }
-.float-nav .fn-btn {
-  width: 48px; height: 48px; border-radius: 50%;
-  border: 1px solid var(--line);
-  background: var(--card);
-  color: var(--theme);
-  font-size: 20px; line-height: 1;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 3px 10px rgba(0,0,0,.18);
-  cursor: pointer; user-select: none; -webkit-user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  padding: 0; outline: none;
-}
-.float-nav .fn-btn:active { background: var(--theme); color: #fff; }
-.float-nav .fn-btn:disabled { opacity: .25; pointer-events: none; }
