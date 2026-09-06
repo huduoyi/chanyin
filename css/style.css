@@ -427,15 +427,15 @@ input, select { font-family: inherit; font-size: var(--font); }
 }
 .acc-price-input,
 .acc-qty-input {
-  width: 100%;
-  min-width: 52px;
-  padding: 4px 6px;
+  width: 64px;
+  min-width: 64px;
+  padding: 6px 8px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 10px;
   background: #fff;
   color: var(--text);
   font-size: 14px;
-  text-align: right;
+  text-align: center;
   -moz-appearance: textfield;
 }
 .acc-price-input::-webkit-outer-spin-button,
@@ -444,3 +444,36 @@ input, select { font-family: inherit; font-size: var(--font); }
 .acc-qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .acc-price-input:focus,
 .acc-qty-input:focus { outline: none; border-color: var(--theme); }
+
+/* 验收页表头在窄屏自动换行，避免日期/分类/按钮挤压溢出 */
+#panel-accept .catalog-head { flex-wrap: wrap; }
+
+/* 验收页子视图切换（待验收 / 保存记录） */
+.accept-subtabs {
+  flex: 0 0 auto; display: flex; gap: 8px; padding: 8px 12px; background: var(--bg);
+}
+.acc-sub {
+  flex: 1 1 0; border: 1px solid var(--line); background: #fff; color: var(--muted);
+  border-radius: 16px; padding: 7px 0; font-size: 13px; font-weight: 600;
+}
+.acc-sub.active { border-color: var(--theme); color: var(--theme); background: #fff5f6; }
+
+/* 验收页「保存记录」列表 */
+.accept-saved { padding: 4px 0; }
+.saved-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  margin-bottom: 10px; overflow: hidden;
+}
+.saved-head {
+  padding: 8px 12px; font-size: 12px; font-weight: 600; color: var(--muted);
+  background: #fafafa; border-bottom: 1px solid var(--line);
+}
+.saved-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-bottom: 1px solid #f3f3f3; font-size: 14px;
+}
+.saved-row:last-child { border-bottom: none; }
+.saved-name { font-weight: 600; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-price { color: var(--theme); font-weight: 600; min-width: 64px; text-align: center; }
+.saved-unit { color: var(--muted); min-width: 36px; text-align: center; }
+.saved-qty { min-width: 64px; text-align: center; }

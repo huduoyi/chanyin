@@ -53,22 +53,28 @@
         </div>
       </section>
 
-      <!-- Tab3 验收（按日期查看开单 → 可改价格/数量 → 保存已选）-->
+      <!-- Tab3 验收（按日期查看开单 → 可改价格/数量 → 保存已选 / 保存记录）-->
       <section class="tab-panel" id="panel-accept">
         <div class="panel-head catalog-head">
           <input type="date" id="acc-date" class="mini-select acc-date">
+          <select id="acc-cat" class="mini-select"></select>
           <span id="accept-count" class="count">0 项</span>
-          <div class="tool-btns">
-            <button id="btn-save-accept" class="btn primary sm">保存已选的</button>
+          <div class="tool-btns" id="accept-tool-btns">
+            <button id="btn-save-accept" class="btn primary sm">保存已选</button>
           </div>
         </div>
+        <div class="accept-subtabs" id="accept-subtabs">
+          <button class="acc-sub active" data-view="pending">待验收</button>
+          <button class="acc-sub" data-view="saved">保存记录</button>
+        </div>
         <div class="list-scroll">
-          <table class="grid">
+          <table class="grid" id="accept-grid">
             <thead>
               <tr><th>名称</th><th>单价</th><th>单位</th><th>数量</th><th>选择</th></tr>
             </thead>
             <tbody id="accept-body"></tbody>
           </table>
+          <div id="accept-saved" class="accept-saved" style="display:none"></div>
         </div>
       </section>
 
@@ -89,11 +95,11 @@
         <div class="toolbar" id="lib-toolbar">
           <span id="library-count" class="count">0 项</span>
           <div class="lib-toolbar-btns" id="lib-toolbar-normal">
+            <button id="lib-add-item" class="btn small primary">添加</button>
             <button id="lib-sort-btn" class="btn small outline">排序 ▾</button>
             <button id="lib-edit-btn" class="btn small outline">编辑</button>
           </div>
           <div class="lib-toolbar-btns lib-edit-actions" id="lib-toolbar-edit" style="display:none">
-            <button id="lib-add-item" class="btn small primary">添加</button>
             <button id="lib-select-all" class="btn small outline">全选</button>
             <button id="lib-delete-selected" class="btn small danger">删除选中(<span id="lib-selected-count">0</span>)</button>
             <button id="lib-edit-done" class="btn small primary">完成</button>

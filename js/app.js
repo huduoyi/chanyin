@@ -39,6 +39,8 @@
   var State = {
     tabIndex: 0,
     catalog: { cat: '全部', search: '' },
+    acceptance: { cat: '全部' },
+    acceptView: 'pending', // 'pending' 待验收 | 'saved' 保存记录
     library: { cat: '全部', season: '全部', month: '全部', search: '' },
     ordersDate: null,
     ordersOid: null,
@@ -375,16 +377,52 @@
     return d;
   }
 
+  // 该日期下「已保存」的验收记录包含哪些 productId（用于待验收剔除）
+  function getSavedAcceptProductIds(date) {
+    var ids = {};
+    Store.getAccepts().forEach(function (a) {
+      if (a.date !== date) return;
+      (a.items || []).forEach(function (it) { if (it.productId) ids[it.productId] = true; });
+    });
+    return ids;
+  }
+
+  // 待验收列表：该日期开单项 - 已保存项 - 分类筛选
+  function getAcceptPendingItems(date) {
+    var items = getAcceptItems(date);
+    var saved = getSavedAcceptProductIds(date);
+    var c = State.acceptance.cat;
+    return items.filter(function (it) {
+      if (saved[it.productId]) return false;
+      if (c && c !== '全部' && it.category !== c) return false;
+      return true;
+    });
+  }
+
+  // 切换「待验收 / 保存记录」子视图的显隐
+  function applyAcceptView() {
+    var grid = $('#accept-grid');
+    var saved = $('#accept-saved');
+    var saveBtn = $('#btn-save-accept');
+    var pending = State.acceptView === 'pending';
+    if (grid) grid.style.display = pending ? '' : 'none';
+    if (saved) saved.style.display = pending ? 'none' : '';
+    if (saveBtn) saveBtn.style.display = pending ? '' : 'none';
+    $$('.acc-sub').forEach(function (b) { b.classList.toggle('active', b.dataset.view === State.acceptView); });
+  }
+
   function renderAcceptance() {
+    applyAcceptView();
+    var date = getAcceptDate();
+    if (State.acceptView === 'saved') { renderAcceptSaved(date); return; }
     var body = $('#accept-body');
     if (!body) return;
-    var date = getAcceptDate();
-    var items = getAcceptItems(date);
+    var items = getAcceptPendingItems(date);
     var draft = Store.getAcceptDraft()[date] || {};
     var cnt = $('#accept-count');
     if (cnt) cnt.textContent = items.length + ' 项';
     if (!items.length) {
-      body.innerHTML = '<tr><td colspan="5" class="empty-cell">该日期还没有开单记录</td></tr>';
+      body.innerHTML = '<tr><td colspan="5" class="empty-cell">该日期还没有待验收的开单项</td></tr>';
       return;
     }
     chunkTable(body, items, function (it) {
@@ -420,10 +458,34 @@
     }, 30);
   }
 
-  // 保存已选的：勾选项存为一条验收记录
+  // 保存记录视图：列出该日期已保存的验收单（只读）
+  function renderAcceptSaved(date) {
+    var wrap = $('#accept-saved');
+    if (!wrap) return;
+    var accs = Store.getAccepts().filter(function (a) { return a.date === date; });
+    var cnt = $('#accept-count');
+    var total = 0; accs.forEach(function (a) { total += (a.items || []).length; });
+    if (cnt) cnt.textContent = accs.length + ' 单 / ' + total + ' 项';
+    if (!accs.length) { wrap.innerHTML = '<div class="empty">该日期还没有保存的验收记录</div>'; return; }
+    wrap.innerHTML = accs.map(function (a) {
+      var rows = (a.items || []).map(function (it) {
+        return '<div class="saved-row">' +
+          '<span class="saved-name">' + esc(it.name) + '</span>' +
+          '<span class="saved-price">' + fmtMoney(it.price) + '</span>' +
+          '<span class="saved-unit">' + esc(it.unit) + '</span>' +
+          '<span class="saved-qty">' + esc(it.qty) + '</span>' +
+          '</div>';
+      }).join('');
+      return '<div class="saved-card">' +
+        '<div class="saved-head">🕒 ' + esc(a.time || '') + '</div>' + rows +
+        '</div>';
+    }).join('');
+  }
+
+  // 保存已选：勾选项存为一条验收记录；已存项自动退出「待验收」当前页
   function saveAcceptSelected() {
     var date = getAcceptDate();
-    var items = getAcceptItems(date);
+    var items = getAcceptPendingItems(date);
     var draft = Store.getAcceptDraft()[date] || {};
     var picked = [];
     items.forEach(function (it) {
@@ -1381,6 +1443,12 @@
       cats.forEach(function (c) { var o = document.createElement('option'); o.value = c; o.textContent = c; ls.appendChild(o); });
       ls.value = State.library.cat;
     }
+    var as = $('#acc-cat');
+    if (as) {
+      as.innerHTML = '<option value="全部">全部种类</option>';
+      cats.forEach(function (c) { var o = document.createElement('option'); o.value = c; o.textContent = c; as.appendChild(o); });
+      as.value = State.acceptance.cat;
+    }
   }
   function fillLibFilters() {
     var ls = $('#lib-season');
@@ -1416,6 +1484,15 @@
     // acceptance（验收）
     var accDate = $('#acc-date');
     if (accDate) accDate.addEventListener('change', function () { renderAcceptance(); });
+    var accCat = $('#acc-cat');
+    if (accCat) accCat.addEventListener('change', function () { State.acceptance.cat = this.value; renderAcceptance(); scrollPanelTop('#panel-accept'); });
+    var accSub = $('#accept-subtabs');
+    if (accSub) accSub.addEventListener('click', function (e) {
+      var b = e.target.closest('.acc-sub');
+      if (!b) return;
+      State.acceptView = b.dataset.view;
+      renderAcceptance();
+    });
     var saveAcc = $('#btn-save-accept');
     if (saveAcc) saveAcc.addEventListener('click', function () { saveAcceptSelected(); });
 
