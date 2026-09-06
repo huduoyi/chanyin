@@ -61,6 +61,10 @@
     });
   }
   function fmtMoney(n) { return '¥' + (typeof n === 'number' ? n.toFixed(2) : '0.00'); }
+  function nowTimeStr() {
+    var d = new Date();
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
 
   var toastTimer;
   function toast(msg) {
@@ -175,8 +179,8 @@
       var t = e.target;
       if (t.tagName !== 'INPUT' || t.type !== 'number') return;
       if (!t.closest('.list-scroll')) return;
-      // 仅对常用原料和记录详情的数量框自动全选
-      if (t.closest('#catalog-body') || t.classList.contains('oi-qty-input')) {
+      // 开单页 / 验收页 / 开单记录详情的数量与价格框自动全选
+      if (t.closest('#catalog-body') || t.closest('#accept-body') || t.classList.contains('oi-qty-input')) {
         setTimeout(function () { try { t.select(); } catch (err) {} }, 0);
       }
       ensureVisible(t);
@@ -213,14 +217,15 @@
   function switchTab(i) {
     stopHold(); // 切换页面时停止任何正在进行的长按重复，避免卡在原料库
     State.tabIndex = i;
-    track.style.transform = 'translate3d(' + (-i * 25) + '%,0,0)';
+    track.style.transform = 'translate3d(' + (-i * 20) + '%,0,0)';
     $$('[data-track]').forEach(function (b) {
       b.classList.toggle('active', +b.dataset.track === i);
     });
     if (i === 0) renderCatalog();
     else if (i === 1) renderOrders();
-    else if (i === 2) renderLibrary();
-    else if (i === 3) renderSettings();
+    else if (i === 2) renderAcceptance();
+    else if (i === 3) renderLibrary();
+    else if (i === 4) renderSettings();
   }
 
   // ============ 分块渲染 ============
@@ -320,9 +325,128 @@
     Store.setCommonSel(sel);
     renderCatalog();
     renderOrders();
-    toast(type === 'inventory' ? '已生成盘存单' : '已下单');
+    // 验收页数据源就是开单记录，下单后该日期自动可验收；盘存不进验收
+    if (type !== 'inventory') renderAcceptance();
+    toast(type === 'inventory' ? '已生成盘存单 → 开单记录' : '已下单 → 开单记录 + 验收页');
   }
 
+  // ============ Tab3 验收 ============
+  // 数据源：开单记录中「该日期 + type=order」的单据（盘存不进验收）
+  // 价格可改 → 直接写回原料库（开单页、原料库同步生效）
+  // 数量可改 → 存当日草稿
+  function getAcceptItems(date) {
+    var orders = Store.getOrders().filter(function (o) {
+      return o.date === date && (o.type || 'order') === 'order';
+    });
+    var map = {};
+    orders.forEach(function (o) {
+      (o.items || []).forEach(function (it) {
+        var id = it.productId;
+        if (!map[id]) {
+          map[id] = { productId: id, name: it.name, unit: it.unit, price: it.price, category: it.category || '', qty: 0 };
+        }
+        map[id].qty += (it.qty || 0);
+      });
+    });
+    // 单价以原料库当前值为准（验收页改价会写回原料库）
+    var products = Store.getProducts();
+    var pm = {};
+    products.forEach(function (p) { pm[p.id] = p; });
+    return Object.keys(map).map(function (k) {
+      var it = map[k];
+      if (pm[k]) { it.price = pm[k].price; it.unit = pm[k].unit || it.unit; }
+      return it;
+    });
+  }
+
+  // 写当日验收草稿的某个字段（qty / price / checked）
+  function setAcceptDraftField(date, pid, field, val) {
+    var all = Store.getAcceptDraft();
+    all[date] = all[date] || {};
+    all[date][pid] = all[date][pid] || {};
+    all[date][pid][field] = val;
+    Store.setAcceptDraft(all);
+  }
+
+  function getAcceptDate() {
+    var el = $('#acc-date');
+    var d = (el && el.value) || Store.nowDateStr();
+    if (el && !el.value) el.value = d;
+    return d;
+  }
+
+  function renderAcceptance() {
+    var body = $('#accept-body');
+    if (!body) return;
+    var date = getAcceptDate();
+    var items = getAcceptItems(date);
+    var draft = Store.getAcceptDraft()[date] || {};
+    var cnt = $('#accept-count');
+    if (cnt) cnt.textContent = items.length + ' 项';
+    if (!items.length) {
+      body.innerHTML = '<tr><td colspan="5" class="empty-cell">该日期还没有开单记录</td></tr>';
+      return;
+    }
+    chunkTable(body, items, function (it) {
+      var tr = document.createElement('tr');
+      tr.dataset.id = it.productId;
+      var d = draft[it.productId] || {};
+      var qty = (d.qty != null ? d.qty : it.qty);
+      var price = (d.price != null ? d.price : it.price);
+      tr.innerHTML =
+        '<td class="c-name">' + esc(it.name) + '</td>' +
+        '<td class="c-price"><input type="number" inputmode="decimal" step="0.1" min="0" class="acc-price-input" value="' + price + '" enterkeyhint="next"></td>' +
+        '<td class="c-unit">' + esc(it.unit) + '</td>' +
+        '<td class="c-qty"><input type="number" inputmode="decimal" step="0.1" min="0" class="acc-qty-input" value="' + qty + '" enterkeyhint="next"></td>' +
+        '<td class="c-sel"><input type="checkbox"' + (d.checked ? ' checked' : '') + '></td>';
+      // 改单价 → 写回原料库，开单页 / 原料库同步生效
+      tr.querySelector('.acc-price-input').addEventListener('input', function () {
+        var v = parseFloat(this.value) || 0;
+        var products = Store.getProducts();
+        var hit = false;
+        products.forEach(function (p) { if (p.id === it.productId) { p.price = v; hit = true; } });
+        if (hit) { Store.setProducts(products); Store.flush(); }
+        setAcceptDraftField(date, it.productId, 'price', v);
+      });
+      // 改数量 → 存草稿
+      tr.querySelector('.acc-qty-input').addEventListener('input', function () {
+        setAcceptDraftField(date, it.productId, 'qty', parseFloat(this.value) || 0);
+      });
+      // 勾选
+      tr.querySelector('input[type=checkbox]').addEventListener('change', function () {
+        setAcceptDraftField(date, it.productId, 'checked', this.checked);
+      });
+      return tr;
+    }, 30);
+  }
+
+  // 保存已选的：勾选项存为一条验收记录
+  function saveAcceptSelected() {
+    var date = getAcceptDate();
+    var items = getAcceptItems(date);
+    var draft = Store.getAcceptDraft()[date] || {};
+    var picked = [];
+    items.forEach(function (it) {
+      var d = draft[it.productId];
+      if (d && d.checked) {
+        picked.push({
+          productId: it.productId, name: it.name, unit: it.unit,
+          price: (d.price != null ? d.price : it.price),
+          category: it.category || '',
+          qty: (d.qty != null ? d.qty : it.qty)
+        });
+      }
+    });
+    if (!picked.length) { toast('请先勾选要验收的项'); return; }
+    var accepts = Store.getAccepts();
+    accepts.unshift({ id: uid(), date: date, time: nowTimeStr(), items: picked });
+    Store.setAccepts(accepts);
+    // 清掉当日草稿，便于下次重新录入
+    var all = Store.getAcceptDraft(); delete all[date]; Store.setAcceptDraft(all);
+    Store.flush();
+    toast('已保存验收（' + picked.length + ' 项）');
+    renderAcceptance();
+  }
 
 
   // ============ Tab2 订单记录 ============
@@ -1282,13 +1406,18 @@
     $$('[data-track]').forEach(function (b) {
       b.addEventListener('click', function () { switchTab(+b.dataset.track); });
     });
-    $('#nav-add').addEventListener('click', function () { openEditor(null); });
 
     // catalog
     $('#cat-filter').addEventListener('change', function (e) { State.catalog.cat = e.target.value; renderCatalog(); scrollPanelTop('#panel-catalog'); });
     $('#catalog-search-btn').addEventListener('click', function () { openSearch('catalog'); });
     $('#btn-order').addEventListener('click', function () { doOrder('order'); });
     $('#btn-inventory').addEventListener('click', function () { doOrder('inventory'); });
+
+    // acceptance（验收）
+    var accDate = $('#acc-date');
+    if (accDate) accDate.addEventListener('change', function () { renderAcceptance(); });
+    var saveAcc = $('#btn-save-accept');
+    if (saveAcc) saveAcc.addEventListener('click', function () { saveAcceptSelected(); });
 
     // orders
     $('#tog-price').addEventListener('change', function () {
@@ -1326,6 +1455,9 @@
     $('#lib-select-all').addEventListener('click', function () { selectAllLib(); });
     $('#lib-delete-selected').addEventListener('click', function () { deleteSelectedLib(); });
     $('#lib-edit-done').addEventListener('click', function () { toggleLibEditMode(); });
+    // 原料库编辑态下也能新增原料（原底部「＋」功能迁移到这里）
+    var libAdd = $('#lib-add-item');
+    if (libAdd) libAdd.addEventListener('click', function () { openEditor(null); });
     $('#lib-search-input').addEventListener('input', function (e) { State.library.search = e.target.value; renderLibrary(); });
     $('#lib-search-btn').addEventListener('click', function () {
       var w = $('#lib-search-wrap');

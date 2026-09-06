@@ -1,5 +1,5 @@
 /* 餐饮后厨 — Service Worker：缓存应用外壳，支持离线使用（PWA） */
-const CACHE = 'cyhc-v15';
+const CACHE = 'cyhc-v16';
 const ASSETS = [
   './', './index.html',
   './css/style.css',

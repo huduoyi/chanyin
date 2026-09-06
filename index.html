@@ -53,7 +53,26 @@
         </div>
       </section>
 
-      <!-- Tab3 原料库 -->
+      <!-- Tab3 验收（按日期查看开单 → 可改价格/数量 → 保存已选）-->
+      <section class="tab-panel" id="panel-accept">
+        <div class="panel-head catalog-head">
+          <input type="date" id="acc-date" class="mini-select acc-date">
+          <span id="accept-count" class="count">0 项</span>
+          <div class="tool-btns">
+            <button id="btn-save-accept" class="btn primary sm">保存已选的</button>
+          </div>
+        </div>
+        <div class="list-scroll">
+          <table class="grid">
+            <thead>
+              <tr><th>名称</th><th>单价</th><th>单位</th><th>数量</th><th>选择</th></tr>
+            </thead>
+            <tbody id="accept-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Tab4 原料库 -->
       <section class="tab-panel" id="panel-library">
         <div class="panel-head">
           <div class="filter-tags">
@@ -74,6 +93,7 @@
             <button id="lib-edit-btn" class="btn small outline">编辑</button>
           </div>
           <div class="lib-toolbar-btns lib-edit-actions" id="lib-toolbar-edit" style="display:none">
+            <button id="lib-add-item" class="btn small primary">添加</button>
             <button id="lib-select-all" class="btn small outline">全选</button>
             <button id="lib-delete-selected" class="btn small danger">删除选中(<span id="lib-selected-count">0</span>)</button>
             <button id="lib-edit-done" class="btn small primary">完成</button>
@@ -145,13 +165,13 @@
 
     </div>
 
-    <!-- 底部 5 Tab 导航 -->
+    <!-- 底部 5 Tab 导航（开单 / 开单记录 / 验收 / 原料库 / 设置）-->
     <nav class="bottom-nav">
-      <button class="nav-item" data-track="0"><span class="nav-ico">📋</span><span>常用原料</span></button>
-      <button class="nav-item" data-track="1"><span class="nav-ico">🧾</span><span>记录</span></button>
-      <button class="nav-item nav-add" id="nav-add"><span class="nav-ico add">＋</span></button>
-      <button class="nav-item" data-track="2"><span class="nav-ico">📦</span><span>原料库</span></button>
-      <button class="nav-item" data-track="3"><span class="nav-ico">⚙️</span><span>设置</span></button>
+      <button class="nav-item" data-track="0"><span class="nav-ico">📋</span><span>开单</span></button>
+      <button class="nav-item" data-track="1"><span class="nav-ico">🧾</span><span>开单记录</span></button>
+      <button class="nav-item" data-track="2"><span class="nav-ico">✅</span><span>验收</span></button>
+      <button class="nav-item" data-track="3"><span class="nav-ico">📦</span><span>原料库</span></button>
+      <button class="nav-item" data-track="4"><span class="nav-ico">⚙️</span><span>设置</span></button>
     </nav>
 
     <!-- 全屏搜索 overlay -->

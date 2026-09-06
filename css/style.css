@@ -48,13 +48,13 @@ input, select { font-family: inherit; font-size: var(--font); }
 .tab-track {
   flex: 1 1 auto;
   display: flex;
-  width: 400%;
+  width: 500%;
   height: 100%;
   transition: transform .26s cubic-bezier(.22, .61, .36, 1);
   will-change: transform;
 }
 .tab-panel {
-  width: 25%;
+  width: 20%;
   height: 100%;
   overflow: hidden;
   display: flex;
@@ -413,3 +413,34 @@ input, select { font-family: inherit; font-size: var(--font); }
   flex-direction: column;
   min-height: 0;
 }
+
+/* 验收页：日期选择器 + 可改价格/数量 */
+.acc-date {
+  flex: 0 0 auto;
+  max-width: 150px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+}
+.acc-price-input,
+.acc-qty-input {
+  width: 100%;
+  min-width: 52px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  font-size: 14px;
+  text-align: right;
+  -moz-appearance: textfield;
+}
+.acc-price-input::-webkit-outer-spin-button,
+.acc-price-input::-webkit-inner-spin-button,
+.acc-qty-input::-webkit-outer-spin-button,
+.acc-qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.acc-price-input:focus,
+.acc-qty-input:focus { outline: none; border-color: var(--theme); }
