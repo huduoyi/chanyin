@@ -477,3 +477,20 @@ input, select { font-family: inherit; font-size: var(--font); }
 .saved-price { color: var(--theme); font-weight: 600; min-width: 64px; text-align: center; }
 .saved-unit { color: var(--muted); min-width: 36px; text-align: center; }
 .saved-qty { min-width: 64px; text-align: center; }
+
+/* 保存记录：时间维度（日/月/年）+ 导出 工具条 */
+.accept-saved-bar {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 12px; background: var(--bg); border-bottom: 1px solid var(--line);
+}
+.acc-dim-tabs { display: flex; gap: 4px; }
+.acc-dim {
+  border: 1px solid var(--line); background: #fff; color: var(--muted);
+  border-radius: 14px; padding: 5px 12px; font-size: 13px; font-weight: 600;
+}
+.acc-dim.active { border-color: var(--theme); color: var(--theme); background: #fff5f6; }
+.acc-month {
+  max-width: 150px; padding: 5px 8px; border: 1px solid var(--line);
+  border-radius: 8px; background: #fff; color: var(--text); font-size: 13px;
+}
+#accept-saved-bar .btn { margin-left: auto; }

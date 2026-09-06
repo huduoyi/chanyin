@@ -41,6 +41,7 @@
     catalog: { cat: '全部', search: '' },
     acceptance: { cat: '全部' },
     acceptView: 'pending', // 'pending' 待验收 | 'saved' 保存记录
+    acceptDim: 'day', // 'day' 日 | 'month' 月 | 'year' 年（保存记录时间维度）
     library: { cat: '全部', season: '全部', month: '全部', search: '' },
     ordersDate: null,
     ordersOid: null,
@@ -404,17 +405,23 @@
     var grid = $('#accept-grid');
     var saved = $('#accept-saved');
     var saveBtn = $('#btn-save-accept');
+    var dateEl = $('#acc-date');
+    var catEl = $('#acc-cat');
+    var savedBar = $('#accept-saved-bar');
     var pending = State.acceptView === 'pending';
     if (grid) grid.style.display = pending ? '' : 'none';
     if (saved) saved.style.display = pending ? 'none' : '';
     if (saveBtn) saveBtn.style.display = pending ? '' : 'none';
+    if (dateEl) dateEl.style.display = pending ? '' : 'none';
+    if (catEl) catEl.style.display = pending ? '' : 'none';
+    if (savedBar) savedBar.style.display = pending ? 'none' : '';
     $$('.acc-sub').forEach(function (b) { b.classList.toggle('active', b.dataset.view === State.acceptView); });
   }
 
   function renderAcceptance() {
     applyAcceptView();
     var date = getAcceptDate();
-    if (State.acceptView === 'saved') { renderAcceptSaved(date); return; }
+    if (State.acceptView === 'saved') { renderAcceptSaved(); return; }
     var body = $('#accept-body');
     if (!body) return;
     var items = getAcceptPendingItems(date);
@@ -458,16 +465,51 @@
     }, 30);
   }
 
-  // 保存记录视图：列出该日期已保存的验收单（只读）
-  function renderAcceptSaved(date) {
+  // 当前「保存记录」所选时间维度与范围前缀（YYYY / YYYY-MM / YYYY-MM-DD）
+  function getAcceptSavedTime() {
+    var dim = State.acceptDim;
+    if (dim === 'year') { var y = $('#acc-saved-year'); return { dim: dim, prefix: (y && y.value) || ('' + new Date().getFullYear()) }; }
+    if (dim === 'month') { var m = $('#acc-saved-month'); return { dim: dim, prefix: (m && m.value) || '' }; }
+    var d = $('#acc-saved-date'); return { dim: dim, prefix: (d && d.value) || Store.nowDateStr() };
+  }
+
+  // 按所选时间维度筛选出范围内的验收记录
+  function getSavedRecordsInRange() {
+    var t = getAcceptSavedTime();
+    if (!t.prefix) return [];
+    return Store.getAccepts().filter(function (a) {
+      return a.date && a.date.indexOf(t.prefix) === 0;
+    });
+  }
+
+  // 用已有记录的年份 + 当前年 填充「年」下拉（倒序，保留当前选择）
+  function populateAcceptYear(yEl) {
+    if (!yEl) return;
+    var years = {};
+    Store.getAccepts().forEach(function (a) { if (a.date) years[a.date.slice(0, 4)] = true; });
+    years[new Date().getFullYear()] = true;
+    var list = Object.keys(years).sort(function (a, b) { return b - a; });
+    var cur = yEl.value;
+    yEl.innerHTML = list.map(function (y) { return '<option value="' + y + '">' + y + ' 年</option>'; }).join('');
+    yEl.value = (cur && years[cur]) ? cur : list[0];
+  }
+
+  // 保存记录视图：按年/月/日维度筛选并列出（只读）
+  function renderAcceptSaved() {
     var wrap = $('#accept-saved');
     if (!wrap) return;
-    var accs = Store.getAccepts().filter(function (a) { return a.date === date; });
+    // 初始化各时间选择器默认值
+    var dEl = $('#acc-saved-date'), mEl = $('#acc-saved-month'), yEl = $('#acc-saved-year');
+    if (dEl && !dEl.value) dEl.value = Store.nowDateStr();
+    if (mEl && !mEl.value) { var n = new Date(); mEl.value = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0'); }
+    populateAcceptYear(yEl);
+    var recs = getSavedRecordsInRange();
     var cnt = $('#accept-count');
-    var total = 0; accs.forEach(function (a) { total += (a.items || []).length; });
-    if (cnt) cnt.textContent = accs.length + ' 单 / ' + total + ' 项';
-    if (!accs.length) { wrap.innerHTML = '<div class="empty">该日期还没有保存的验收记录</div>'; return; }
-    wrap.innerHTML = accs.map(function (a) {
+    var total = 0; recs.forEach(function (a) { total += (a.items || []).length; });
+    if (cnt) cnt.textContent = recs.length + ' 单 / ' + total + ' 项';
+    if (!recs.length) { wrap.innerHTML = '<div class="empty">该时间范围内还没有保存的验收记录</div>'; return; }
+    // 倒序：最新在前
+    wrap.innerHTML = recs.map(function (a) {
       var rows = (a.items || []).map(function (it) {
         return '<div class="saved-row">' +
           '<span class="saved-name">' + esc(it.name) + '</span>' +
@@ -477,9 +519,33 @@
           '</div>';
       }).join('');
       return '<div class="saved-card">' +
-        '<div class="saved-head">🕒 ' + esc(a.time || '') + '</div>' + rows +
+        '<div class="saved-head">📅 ' + esc(a.date) + ' · 🕒 ' + esc(a.time || '') + '</div>' + rows +
         '</div>';
     }).join('');
+  }
+
+  // 导出按钮文案随维度变化（导出当日 / 当月 / 全年）
+  function updateExportLabel() {
+    var b = $('#btn-export-accept');
+    if (!b) return;
+    var map = { day: '导出当日', month: '导出当月', year: '导出全年' };
+    b.textContent = map[State.acceptDim] || '导出';
+  }
+
+  // 按当前时间维度导出范围内全部记录明细为 CSV
+  function exportAcceptRecords() {
+    var t = getAcceptSavedTime();
+    var recs = getSavedRecordsInRange();
+    if (!recs.length) { toast('该时间范围内没有可导出的记录'); return; }
+    var headers = ['日期', '时间', '名称', '单位', '单价', '分类', '数量'];
+    var rows = [];
+    recs.forEach(function (a) {
+      (a.items || []).forEach(function (it) {
+        rows.push([a.date, a.time || '', it.name, it.unit, it.price, it.category || '', it.qty]);
+      });
+    });
+    Store.downloadCSV('验收记录_' + t.prefix + '.csv', rows, headers);
+    toast('已导出 ' + rows.length + ' 条明细');
   }
 
   // 保存已选：勾选项存为一条验收记录；已存项自动退出「待验收」当前页
@@ -1495,6 +1561,25 @@
     });
     var saveAcc = $('#btn-save-accept');
     if (saveAcc) saveAcc.addEventListener('click', function () { saveAcceptSelected(); });
+    // 保存记录：年/月/日 时间维度切换
+    var dimTabs = $('#acc-dim-tabs');
+    if (dimTabs) dimTabs.addEventListener('click', function (e) {
+      var b = e.target.closest('.acc-dim');
+      if (!b) return;
+      State.acceptDim = b.dataset.dim;
+      $$('.acc-dim').forEach(function (x) { x.classList.toggle('active', x.dataset.dim === State.acceptDim); });
+      var dEl = $('#acc-saved-date'), mEl = $('#acc-saved-month'), yEl = $('#acc-saved-year');
+      if (dEl) dEl.style.display = State.acceptDim === 'day' ? '' : 'none';
+      if (mEl) mEl.style.display = State.acceptDim === 'month' ? '' : 'none';
+      if (yEl) yEl.style.display = State.acceptDim === 'year' ? '' : 'none';
+      updateExportLabel();
+      renderAcceptance();
+    });
+    var sd = $('#acc-saved-date'); if (sd) sd.addEventListener('change', function () { renderAcceptance(); });
+    var sm = $('#acc-saved-month'); if (sm) sm.addEventListener('change', function () { renderAcceptance(); });
+    var sy = $('#acc-saved-year'); if (sy) sy.addEventListener('change', function () { renderAcceptance(); });
+    var expBtn = $('#btn-export-accept');
+    if (expBtn) expBtn.addEventListener('click', function () { exportAcceptRecords(); });
 
     // orders
     $('#tog-price').addEventListener('change', function () {

@@ -67,6 +67,19 @@
           <button class="acc-sub active" data-view="pending">待验收</button>
           <button class="acc-sub" data-view="saved">保存记录</button>
         </div>
+        <div class="accept-saved-bar" id="accept-saved-bar" style="display:none">
+          <div class="acc-dim-tabs" id="acc-dim-tabs">
+            <button class="acc-dim active" data-dim="day">日</button>
+            <button class="acc-dim" data-dim="month">月</button>
+            <button class="acc-dim" data-dim="year">年</button>
+          </div>
+          <div class="acc-dim-sel">
+            <input type="date" id="acc-saved-date" class="mini-select acc-date">
+            <input type="month" id="acc-saved-month" class="mini-select acc-month" style="display:none">
+            <select id="acc-saved-year" class="mini-select" style="display:none"></select>
+          </div>
+          <button id="btn-export-accept" class="btn outline sm">导出当日</button>
+        </div>
         <div class="list-scroll">
           <table class="grid" id="accept-grid">
             <thead>
